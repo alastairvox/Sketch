@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Python: Sketch",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/me/Sketch/sketch.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "justMyCode": true
+        }
+    ]
+}
