@@ -136,3 +136,6 @@ info = logging.info
 warn = logging.warning
 error = logging.error
 critical = logging.critical
+
+# PROBABLY dont need debugging for the base asynchronous log?
+logging.getLogger("asyncio").setLevel(logging.INFO)
