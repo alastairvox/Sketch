@@ -49,19 +49,21 @@ async def hello(request):
 
     return aiohttp.web.Response(status=404)
 
+# redirects user to google's oauth endpoint to begin oauth flow
+# https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#httprest_1
 @routes.get('/youtube/auth/{userID}')
 async def youtubeAuth(request):
     userID = request.match_info.get('userID', '')
 
-    info('Responding to YouTube OAuth request for user: ' + str(userID))
+    debug('Responding to YouTube OAuth request for user: ' + str(userID))
 
     # TODO search database for this yt userID and see if it exists and is waiting for auth
     #   - stop using 'True'
+    userFound = True
 
     # if we have an entry for this user and are waiting for them to authenticate
-    # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#httprest
-    if True:
-        debug('userID found in database. Redirecting user to YouTube auth page.')
+    if userFound:
+        info('Redirecting user to YouTube auth page, userID ' + str(userID) + ' found in database.')
 
         scopes = 'https://www.googleapis.com/auth/youtube.force-ssl'
 
@@ -74,7 +76,7 @@ async def youtubeAuth(request):
         "&state=" + str(userID) + 
         "&include_granted_scopes=true")
     else:
-        debug('userID not found in database.')
+        error('userID ' + str(userID) + ' not found in database.')
         
         return aiohttp.web.Response(text="""<div style="height: 100%; display: flex; justify-content: center; align-items: center">
             <div>
@@ -82,15 +84,17 @@ async def youtubeAuth(request):
             </div>
         </div>""", content_type="text/html")
 
+# receives return info from google's oauth endpoint
+# https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#handlingresponse
 @routes.get('/youtube/callback')
 async def youtubeCallback(request):
-    info('Responding to YouTube callback request.')
+    debug('Responding to YouTube callback request.')
 
     if 'code' not in request.query or 'state' not in request.query:
-        debug('Request did not contain state or code query attributes.')
+        error('YouTube callback request did not contain either state or code query attributes.')
 
         if 'error' in request.query:
-            debug('Error: ' + str(request.query['error']))
+            error('Error: ' + str(request.query['error']))
             
             result = """<div style="height: 100%; display: flex; justify-content: center; align-items: center">
                 <div>
@@ -99,19 +103,27 @@ async def youtubeCallback(request):
                 </div>
             </div>"""
         else:
-            debug('No error was provided - attempted attack? Youtube should always provide an error.')
+            error('No error provided: attempted attack? Youtube should always provide an error. Request: ' + str(request))
 
             result = """<div style="height: 100%; display: flex; justify-content: center; align-items: center">
                 <div>
-                    <b>Error: Something went wrong with YouTube authorization.</b>
+                    <b>Error: Something went wrong with YouTube authorization. (Unknown Error)</b>
                     <br>Please try again, or contact alastairvox on discord.
                 </div>
             </div>"""
-
     else:
         # use code query attribute to request and store refresh token
-        debug('Request has code: ' + str(request.query['code']) + ' and state: ' + str(request.query['state']))
-
+        info('Received YouTube callback, getting refresh token for userID ' + str(request.query['state']))
+        debug('Request has code: ' + str(request.query['code']))
+        
         result = await sketchYoutube.getYoutubeRefreshToken(request.query['code'], request.query['state'])
     
     return aiohttp.web.Response(text=result, content_type="text/html")
+
+@routes.get('/test')
+async def test(request):
+    debug('Testing...')
+
+    await sketchYoutube.gatherYoutubeVideos(sketchYoutube.ytTestChannel)
+
+    return aiohttp.web.Response(text="testing", content_type="text/html")
