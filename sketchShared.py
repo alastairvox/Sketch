@@ -139,3 +139,6 @@ critical = logging.critical
 
 # PROBABLY dont need debugging for the base asynchronous log?
 logging.getLogger("asyncio").setLevel(logging.INFO)
+
+# set later in main module
+db = None

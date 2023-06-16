@@ -1,5 +1,6 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
+import base64, json
 import sketchAuth, sketchServer
 
 # TODO sketchServer: endpoints to receive YT oauth2 & pubsub
@@ -30,7 +31,8 @@ ytTestChannel = 'UCmkonxPPduKnLNWvqhoHl_g'
 #   - update the video in the database when notified about it
 
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#exchange-authorization-code
-async def getYoutubeRefreshToken(code, userID):
+# https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload
+async def getYoutubeTokens(code, userID):
     debug('Getting refresh token using code: ' + str(code) + ' for userID: ' + str(userID))
 
     async with sketchServer.session.post(
@@ -50,10 +52,11 @@ async def getYoutubeRefreshToken(code, userID):
         # TODO store these tokens in DB / associated with userID
         # TODO do something with the expires_in value returned
         if data and data.get('refresh_token') and data.get('access_token'):
-            info('Received refresh and access token for userID: ' + str(userID))
+            info('Received tokens for userID: ' + str(userID))
 
             sketchAuth.ytRefreshToken = data.get('refresh_token')
             sketchAuth.ytAccessToken = data.get('access_token')
+            sketchAuth.ytId = await getUserIdFromEncodedGoogleIdToken(data.get('id_token'))
 
             result = """
                 <div style="height: 100%; display: flex; justify-content: center; align-items: center">
@@ -76,6 +79,17 @@ async def getYoutubeRefreshToken(code, userID):
             """
         
         return result
+
+# http://dev.fyicenter.com/1001053_Decode_Google_OpenID_Connect_id_token.html
+async def getUserIdFromEncodedGoogleIdToken(id_token):
+    debug('Decoding id token to retrieve users google id...')
+    # the id token is 3 base64 encoded strings delimited by a period, the header (0), the json (1), and the signature (2)
+    base64EncodedJSON = id_token.split('.')[1]
+    # google does not properly pad the base64 strings, so we need to add padding. normally this means doing something with a multiple of 4 characters, but we can just add the max number of padding and let the base64 decoder strip any unnecesary padding (as it is set to do by default)
+    decodedJSON = base64.b64decode(base64EncodedJSON + '==')
+    decodedDict = json.loads(decodedJSON)
+    return decodedDict['sub']
+
 
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#offline
 async def refreshYoutubeAccessToken(userID):
@@ -171,7 +185,7 @@ async def createVideoDictionary(items, vidDict={}):
     return vidDict
 
 # TODO GET videos with parts "status" for schedule date of all private videos (unlisted cant be scheduled)
-async def getScheduledDates(channelID, videoList):
+async def getScheduledDates(channelID, vidDict):
     pass
 
 # TODO pubsub connection

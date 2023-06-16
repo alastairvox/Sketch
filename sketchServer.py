@@ -1,14 +1,14 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
 import asyncio, aiohttp, aiohttp.web, logging
-import sketchAuth, sketchYoutube
+import sketchAuth, sketchYoutube, sketchDatabase
 
 # ---------- SETUP -------------------------------------------------------------------------------------------------------------
 # ---------- SETUP -------------------------------------------------------------------------------------------------------------
 # ---------- SETUP -------------------------------------------------------------------------------------------------------------
 
-async def engage():
-    info("Starting...")
+async def startServer():
+    info('Starting server...')
     
     app.add_routes(routes)
 
@@ -39,7 +39,7 @@ session = aiohttp.ClientSession()
 # ---------- EVENTS ------------------------------------------------------------------------------------------------------------
 # ---------- EVENTS ------------------------------------------------------------------------------------------------------------
 
-# comment this out to hopefully not have to deal with the possibility that aiohhtp parses an attack message :(
+# comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
 @routes.get('/')
 async def hello(request):
     debug('Responding to ' + str(request) +
@@ -65,7 +65,7 @@ async def youtubeAuth(request):
     if userFound:
         info('Redirecting user to YouTube auth page, userID ' + str(userID) + ' found in database.')
 
-        scopes = 'https://www.googleapis.com/auth/youtube.force-ssl'
+        scopes = 'openid https://www.googleapis.com/auth/youtube.force-ssl'
 
         raise aiohttp.web.HTTPTemporaryRedirect("https://accounts.google.com/o/oauth2/v2/auth" + 
         "?client_id=" + sketchAuth.ytClientID + 
@@ -113,10 +113,10 @@ async def youtubeCallback(request):
             </div>"""
     else:
         # use code query attribute to request and store refresh token
-        info('Received YouTube callback, getting refresh token for userID ' + str(request.query['state']))
+        info('Received YouTube callback, getting tokens (refresh, access, id) for userID ' + str(request.query['state']))
         debug('Request has code: ' + str(request.query['code']))
         
-        result = await sketchYoutube.getYoutubeRefreshToken(request.query['code'], request.query['state'])
+        result = await sketchYoutube.getYoutubeTokens(request.query['code'], request.query['state'])
     
     return aiohttp.web.Response(text=result, content_type="text/html")
 
@@ -124,6 +124,6 @@ async def youtubeCallback(request):
 async def test(request):
     debug('Testing...')
 
-    await sketchYoutube.gatherYoutubeVideos(sketchYoutube.ytTestChannel)
+    await sketchDatabase.createDatabase()
 
     return aiohttp.web.Response(text="testing", content_type="text/html")
