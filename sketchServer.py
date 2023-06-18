@@ -22,6 +22,8 @@ async def on_startup(app):
     # TODO disable/remove this for "production"
     logging.getLogger("aiohttp.access").setLevel(logging.WARN)
 
+    await test('')
+
 async def on_shutdown(app):
     info('Disconnected from HTTP server on port ' + sketchAuth.callbackPort + '.')
 
@@ -124,6 +126,6 @@ async def youtubeCallback(request):
 async def test(request):
     debug('Testing...')
 
-    await sketchDatabase.createDatabase()
+    await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
 
     return aiohttp.web.Response(text="testing", content_type="text/html")

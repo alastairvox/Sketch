@@ -6,7 +6,7 @@
             "request": "launch",
             "program": "/home/me/Sketch/sketch.py",
             "console": "integratedTerminal",
-            "justMyCode": true
+            "justMyCode": false
         },
         {
             "name": "Python: File",

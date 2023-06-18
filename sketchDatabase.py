@@ -21,6 +21,82 @@ class AttrDict(dict):
 class AttrDictCursor(asyncmy.cursors.DictCursor):
     dict_type = AttrDict
 
+async def updateTableInfo():
+    global validTables
+    info('Updating valid tables...')
+    # get a list of tables from the database
+    async with db.cursor() as cursor:
+        await cursor.execute("""SHOW TABLES FROM sketch""")
+        data = await cursor.fetchall()
+        # returns a list of dicts
+        for entry in data:
+            # each dict only has one entry
+            for key, value in entry.items():
+                validTables[value] = {}
+                # get a list of each table's column names from the database
+                await cursor.execute("""SHOW COLUMNS FROM sketch.""" + value)
+                columnData = await cursor.fetchall()
+                for column in columnData:
+                    # store the column type for truncating / formatting dates
+                    validTables[value][column['Field']] = column['Type']
+    debug('Tables from DB: ' + str(validTables))
+    return
+
+class SketchDbObj():
+    # we use this as an alternative to init since you cant have an asynchronous init method
+    # the class method decorator means this function refers to the class itself, not the object instance
+    @classmethod
+    async def create(cls, table, dict=None, list=None):
+        self = SketchDbObj()
+        self.list = []
+        # validate that the table exists
+        if table in validTables:
+            self.table = table
+            debug('Valid table!')
+            if dict:
+                await self.add(dict)
+                return self
+            if list:
+                await self.replace(list)
+                return self
+        else:
+            raise ValueError('invalid table (table not found in database): ' + table)
+        return self
+    
+    async def add(self, dict):
+        debug('Dict to add: ' + str(dict))
+        for key, value in dict.items():
+            if key in validTables[self.table].keys():
+                if validTables[self.table][key].startswith('varchar'):
+                    truncateLength = int(validTables[self.table][key].split('(')[1].split(')')[0])
+                    dict[key] = value[:truncateLength]
+                    debug(str(key) + ': ' + str(dict[key]))
+            else:
+                raise ValueError('invalid column name (column not found in table): ' + key)
+
+    async def replace(self, list=[]):
+        debug('Replacting list with: ' + str(list))
+        self.list = []
+        for dict in list:
+            self.add(dict)
+
+    # https://aiomysql.readthedocs.io/en/stable/cursors.html#Cursor.executemany
+    async def store(self):
+        info('Storing rows in database: ' + str(self.list))
+        async with db.cursor() as cursor:
+            for row in self.list:
+                # Compose a string of quoted column names
+                cols = ','.join([f'`{key}`' for key in row.keys()])
+
+                # Compose a string of placeholders for values
+                vals = ','.join(['%s'] * len(row))
+
+                # Create the SQL statement
+                stmt = 'INSERT INTO ' + self.table + f' ({cols}) VALUES ({vals})'
+
+                # Execute the statement, delegating the quoting of values to the connector
+                await cursor.execute(stmt, tuple(row.values()))
+
 # creates database if it doesn't exist, should pretty much never need to be called
 async def createDatabase():
     warn('Creating/replacing main Sketch database...')
@@ -100,9 +176,14 @@ async def connectDatabase():
         error('Error connecting database. Connection function ran, but connected is False afterward.')
 
     sketchShared.db = db
+    await updateTableInfo()
+
     return
 
 global db
+db = None
+global validTables
+validTables = {}
 
 # # fetch all results
 # r = await cursor.fetchone()
