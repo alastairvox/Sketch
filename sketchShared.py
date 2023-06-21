@@ -141,4 +141,5 @@ critical = logging.critical
 logging.getLogger("asyncio").setLevel(logging.INFO)
 
 # set later in main module
+dbEngine = None
 db = None

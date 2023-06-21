@@ -126,6 +126,8 @@ async def youtubeCallback(request):
 async def test(request):
     debug('Testing...')
 
-    await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
+    await sketchDatabase.createDatabase()
+
+    # await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
 
     return aiohttp.web.Response(text="testing", content_type="text/html")
