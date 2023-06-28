@@ -111,7 +111,7 @@ def handleUncaughtExceptions(eType, eValue, eTraceback):
 # set up the root file logger that the base and future loggers copy
 rootLogger = logging.getLogger()
 rootLogger.setLevel(logging.DEBUG)
-rootHandler = logging.handlers.RotatingFileHandler('sketch.log', maxBytes=1000000, backupCount=25)
+rootHandler = logging.handlers.RotatingFileHandler('./logs/sketch.log', maxBytes=1000000, backupCount=25)
 rootHandler.setLevel(logging.DEBUG)
 fileLogFormat = SketchLogFormatter('%(asctime)s %(levelname)-8s %(name)s - %(module)s: %(message)s')
 rootHandler.setFormatter(fileLogFormat)

@@ -4,7 +4,7 @@
             "name": "Python: Sketch",
             "type": "python",
             "request": "launch",
-            "program": "/home/me/Sketch/sketch.py",
+            "program": "/home/me/Sketch/src/sketch.py",
             "console": "integratedTerminal",
             "justMyCode": false
         },
