@@ -33,7 +33,7 @@ class SketchBot(commands.Bot):
         info(f'Connected as {bot.user} (ID: {self.user.id}) to "' + '", "'.join(map(str, bot.guilds)) + '"')
         # get all the guilds Sketch is connected to and check if they all have entries in the config file, if not then create a default one
         configNewGuilds()
-        # await syncAllCommandsToTestServer()
+        # await syncAllCommands()
 
 bot = SketchBot()
 
@@ -59,9 +59,19 @@ def configNewGuilds():
 
 # tells discord what commands my bot knows
 async def syncAllCommandsToTestServer() -> None:
+    warn('MANUALLY SYNCING ALL COMMANDS TO TEST SERVER')
     testServer = discord.Object(sketchAuth.discordTestServerID)
     bot.tree.copy_global_to(guild=testServer)
     await bot.tree.sync(guild=testServer)
+
+async def syncAllCommands() -> None:
+    warn('MANUALLY SYNCING ALL GLOBAL COMMANDS AND THEN COMMANDS FOR ALL CONNECTED GUILDS')
+    await bot.tree.sync()
+    for guild in bot.guilds:
+        try:
+            await bot.tree.sync(guild=guild)
+        except discord.HTTPException:
+            pass
 
 # generic test to see if interaction user is ME
 def isOwner(interaction: discord.Interaction) -> bool:
@@ -888,7 +898,19 @@ async def sync(
             synced = await bot.tree.sync(guild=tempGuild)
         elif mode == "Clear commands from first guild in list and re-sync it.":
             debug('Clearing commands from and resyncing guild ' + str(tempGuild))
+            if tempGuild.id == sketchAuth.discordTestServerID:
+                testCommands = [
+                    bot.tree.get_command('sync',guild=tempGuild),
+                    bot.tree.get_command('crash',guild=tempGuild)
+                ]
+
             bot.tree.clear_commands(guild=tempGuild)
+
+            if tempGuild.id == sketchAuth.discordTestServerID:
+                debug('Re-adding special test commands to test server!')
+                for command in testCommands:
+                    bot.tree.add_command(command,guild=tempGuild)
+
             await bot.tree.sync(guild=tempGuild)
             synced = []
         elif mode == "Re-sync global commands.":
@@ -920,6 +942,14 @@ async def sync(
         else:
             ret += 1
     await interaction.followup.send(f"Synced the tree to {ret}/{len(guilds)} guilds.")
+
+@bot.tree.command(description='Oops :)')
+@app_commands.guilds(sketchAuth.discordTestServerID)
+@app_commands.guild_only()
+@app_commands.check(isOwner)
+async def crash(interaction: discord.Interaction) -> None:
+    # oh no sketch what are you doing you cant divide by 0
+    raise SystemExit
 
 @bot.tree.command(description='Adds a self-assignable role message to the current channel.')
 @app_commands.describe(
