@@ -1,13 +1,13 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
 import asyncio, signal, atexit
-import sketchYoutube, sketchServer, sketchDatabase
+import sketchDiscord, sketchYoutube, sketchServer, sketchDatabase
 
 def exitHandler(*args):
     warn("""
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
-                                SKETCH DIED
+                                SKETCH DIES
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
 """)
@@ -16,7 +16,7 @@ def main():
     warn("""
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
-                              SKETCH IS ALIVE
+                                SKETCH LIVES
 ----------------------------------------------------------------------------
 ----------------------------------------------------------------------------
 """)
@@ -28,9 +28,10 @@ def main():
 
     # gets the current event loop or i guess creates one (there can only ever be one running event loop)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(sketchDatabase.connectDatabase())
+    # loop.run_until_complete(sketchDatabase.summon())
     # schedules a task to run on the event loop next time the event loop checks for stuff, unless the event loop got closed!! (which is why we run forever, otherwise it wont even start them)
-    loop.create_task(sketchServer.startServer())
+    loop.create_task(sketchServer.summon())
+    loop.create_task(sketchDiscord.summon())
     # makes the event loop run forever (this is blocking), so any current and future scheduled tasks will run until we explicitly tell the loop to die with loop.stop()
     loop.run_forever()
 

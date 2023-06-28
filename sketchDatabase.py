@@ -4,7 +4,6 @@ from sqlalchemy import TypeDecorator, String, Boolean, ForeignKey, select
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, AsyncSession, create_async_engine
 from sqlalchemy.sql import expression
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
 import datetime, logging
 import sketchAuth
 
@@ -41,6 +40,43 @@ class SketchConnection(Base):
     serviceName: Mapped[str] = mapped_column(TString(50), primary_key=True)
     serviceId: Mapped[int] = mapped_column(TString(255), primary_key=True)
 
+# class SketchDiscord(Base):
+#     __tablename__ = 'discord'
+
+#     discordId: Mapped[int] = mapped_column(autoincrement=False, primary_key=True)
+#     guildId: Mapped[int] = mapped_column(autoincrement=False, primary_key=True)
+#     # 'owner' (the server owner)
+#     # 'delegate' (can config bot + modify authorized users)
+#     # - only modifiable by owner, and automatically granted to the user that invited the bot
+#     # 'authorized' (can config bot)
+#     permissionType
+
+# class SketchDiscordGuild(Base):
+#     __tablename__ = 'discordGuilds'
+
+#     guildId
+#     # whether admins (ctx.message.author.server_permissions.administrator) can configure the bot - overrides check for explicit perms in connections table
+#     # defaults to true
+#     allowAdminChanges
+
+# class SketchDiscordGuildRoleMessage(Base):
+#     __tablename__ = 'discordRoleMessages'
+
+#     guildId
+#     channelId
+#     messageId
+#     messageText
+
+# class SketchDiscordGuildRoleButton(Base):
+#     __tablename__ = 'discordRoleButtons'
+
+#     # discord message IDs are globally unique, regardless of channel
+#     messageId
+#     # a number representing the order of the button
+#     position
+#     
+
+
 class SketchYoutube(Base):
     __tablename__ = 'youtube'
 
@@ -70,9 +106,9 @@ async def createDatabase():
         await conn.run_sync(Base.metadata.create_all)
 
 # https://docs.sqlalchemy.org/en/20/tutorial/index.html
-async def connectDatabase():
+async def summon():
     global dbEngine, db
-    info('Connecting to database...')
+    info('Summoning...')
 
     logging.getLogger('sqlalchemy').setLevel(logging.INFO)
 

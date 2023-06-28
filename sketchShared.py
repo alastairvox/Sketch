@@ -35,6 +35,8 @@ class SketchLogFormatter(logging.Formatter):
                 self._fmt = self._fmt.replace('%(message)s', '%(module)s: %(message)s')
                 self._style._fmt = self._style._fmt.replace('%(message)s', '%(module)s: %(message)s')
 
+        record.name = record.name.split('.', 1)[0]
+
         # call the original formatting function to handle adding time and etc.
         orig = logging.Formatter.format(self, record)
 
@@ -111,13 +113,13 @@ rootLogger = logging.getLogger()
 rootLogger.setLevel(logging.DEBUG)
 rootHandler = logging.handlers.RotatingFileHandler('sketch.log', maxBytes=1000000, backupCount=25)
 rootHandler.setLevel(logging.DEBUG)
-fileLogFormat = SketchLogFormatter('%(asctime)s %(levelname)-8s %(module)s: %(message)s')
+fileLogFormat = SketchLogFormatter('%(asctime)s %(levelname)-8s %(name)s - %(module)s: %(message)s')
 rootHandler.setFormatter(fileLogFormat)
 
 # set up the console logger so the console can output the same info that goes to the log
 console = DefaultStreamHandler()
 console.setLevel(logging.DEBUG)
-consoleLogFormat = SketchLogFormatter('%(levelname)-8s %(module)s: %(message)s')
+consoleLogFormat = SketchLogFormatter('%(levelname)-8s %(name)s - %(module)s: %(message)s')
 console.setFormatter(consoleLogFormat)
 
 # add the file and console logger handlers to the root so they will always get output
@@ -139,7 +141,5 @@ critical = logging.critical
 
 # PROBABLY dont need debugging for the base asynchronous log?
 logging.getLogger("asyncio").setLevel(logging.INFO)
-
-# set later in main module
-dbEngine = None
-db = None
+# discord SPAMS
+logging.getLogger("discord").setLevel(logging.INFO)

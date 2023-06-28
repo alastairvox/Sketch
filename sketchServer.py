@@ -7,8 +7,8 @@ import sketchAuth, sketchYoutube, sketchDatabase
 # ---------- SETUP -------------------------------------------------------------------------------------------------------------
 # ---------- SETUP -------------------------------------------------------------------------------------------------------------
 
-async def startServer():
-    info('Starting server...')
+async def summon():
+    info('Summoning...')
     
     app.add_routes(routes)
 
@@ -22,7 +22,7 @@ async def on_startup(app):
     # TODO disable/remove this for "production"
     logging.getLogger("aiohttp.access").setLevel(logging.WARN)
 
-    await test('')
+    # await test('')
 
 async def on_shutdown(app):
     info('Disconnected from HTTP server on port ' + sketchAuth.callbackPort + '.')
