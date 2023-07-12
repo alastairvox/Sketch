@@ -1,0 +1,30 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "docker-build",
+			"label": "docker-build",
+			"platform": "python",
+			"dockerBuild": {
+				"tag": "sketch:latest",
+				"dockerfile": "${workspaceFolder}/Dockerfile",
+				"context": "${workspaceFolder}",
+				"pull": true
+			}
+		},
+		{
+			"type": "docker-run",
+			"label": "docker-run: debug",
+			"dependsOn": [
+				"docker-build"
+			],
+			"dockerRun": {
+				"network": "sketchnet",
+				"customOptions": "--mount type=bind,source=\"$(pwd)\",target=/sketch,readonly --mount type=bind,source=\"$(pwd)\"/logs,target=/sketch/logs"
+			  },
+			"python": {
+				"file": "./src/sketch.py"
+			}
+		}
+	]
+}

@@ -143,3 +143,5 @@ critical = logging.critical
 logging.getLogger("asyncio").setLevel(logging.INFO)
 # discord SPAMS
 logging.getLogger("discord").setLevel(logging.INFO)
+
+dev = False

@@ -1,6 +1,6 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import asyncio, signal, atexit
+import asyncio, signal, atexit, sys
 import sketchDiscord, sketchYoutube, sketchServer, sketchDatabase
 
 def exitHandler(*args):
@@ -14,13 +14,33 @@ def exitHandler(*args):
 
 def main():
     warn("""
-----------------------------------------------------------------------------
-----------------------------------------------------------------------------
-                                SKETCH LIVES
-----------------------------------------------------------------------------
-----------------------------------------------------------------------------
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⠋⣤⣤⣌⠙⠿⠿⠿⠿⠿⠿⠟⢉⣠⣤⣌⠹⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⡇⢸⣿⠉⢻⣷⣦⣶⣶⣶⣶⣶⣴⣿⠋⢹⣿⠀⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⡿⠁⣾⣿⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣾⣿⣆⠸⣿⣿⣿⣿⣿
+⣿⣿⣿⠟⢁⣾⡿⠟⠛⠛⠿⣿⣿⣿⣿⣿⣿⣿⠿⠛⠛⠿⣿⣦⠙⢿⣿⣿⣿
+⣿⠟⣁⣴⣿⡿⠀⠀⠀⠀⠀⠈⢻⣿⣿⣿⠏⠀⠀⠀⠀⠀⠘⣿⣷⣄⡙⢻⣿    Sketch v0.01 (Roles-1)
+⣿⣄⡉⠛⢿⣷⠀⠀⢸⣦⡀⠀⠀⢿⣿⡏⠀⠀⣠⣾⠀⠀⢠⣿⠿⠋⣉⣴⣿    Seek Knowledge Everywhere, Tiny Computer Helper
+⣿⠋⢠⣶⣿⣿⣷⣄⠘⠿⣿⡆⠀⢸⣿⠀⠀⣼⡿⠟⢀⣠⣿⣿⣷⣦⡌⢻⣿    Alastair Vox (alastairvox.com)
+⣿⣷⣤⣈⡙⠻⣿⣿⣷⣄⠀⠻⠀⠀⣿⠀⠸⠁⢀⣴⣿⣿⡿⠟⢉⣠⣴⣾⣿
+⣿⣿⣿⣿⣿⣶⣄⠙⢿⣿⣷⠀⠀⠀⣿⠀⠀⠠⣿⣿⠟⢁⣤⣾⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣦⡈⠁⠀⢀⣼⣿⣄⠀⠀⠉⣠⣴⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣀⠛⠿⠿⠟⢃⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 """)
     
+    try:
+        # append the parent directory to the path of modules that can be searched
+        sys.path.append('./')
+        # overrides certain values in sketchAuth for dev environment
+        import sketchDevAuth
+        sketchShared.dev = True
+        warn('MODE: DEVELOPMENT')
+    except ImportError:
+        # not dev, dont do anything
+        warn('MODE: PRODUCTION')
+        pass
+
     # register some handlers for most cases where the program is killed or exits
     atexit.register(exitHandler)
     signal.signal(signal.SIGTERM, exitHandler)

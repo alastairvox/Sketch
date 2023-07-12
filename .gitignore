@@ -160,5 +160,6 @@ cython_debug/
 #.idea/
 
 sketchAuth.py
+sketchDevAuth.py
 Sketch.code-workspace
 *.log.*

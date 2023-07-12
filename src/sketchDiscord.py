@@ -167,14 +167,14 @@ class AddRoleView(BaseView):
         self.add_item(self.currentRoleSelect)
 
         if self.currentPage <= 0:
-            self.previousPage.disabled=True
+            self.previousPage.disabled = True
         else:
-            self.previousPage.disabled=False
+            self.previousPage.disabled = False
 
         if (self.currentPage + 1) >= len(self.rolePages):
-            self.nextPage.disabled=True
+            self.nextPage.disabled = True
         else:
-            self.nextPage.disabled=False
+            self.nextPage.disabled = False
 
         originalResponse = await interaction.original_response()
         embed = await self.getEmbed(originalResponse.embeds[0])
@@ -639,11 +639,6 @@ class ChunkedMessageSelect(discord.ui.Select):
         else:
             super().__init__(placeholder='No role messages in this channel!', min_values=1, max_values=1, disabled=True, options=[discord.SelectOption(label='')])
 
-        # The placeholder is what will be shown when no option is chosen
-        # The min and max values indicate we can only pick one of the three options
-        # The options parameter defines the dropdown options. We defined this above
-        
-
     async def callback(self, interaction: discord.Interaction):
         # Use the interaction object to send a response message containing
         # the user's favourite colour or choice. The self object refers to the
@@ -900,8 +895,8 @@ async def sync(
             debug('Clearing commands from and resyncing guild ' + str(tempGuild))
             if tempGuild.id == sketchAuth.discordTestServerID:
                 testCommands = [
-                    bot.tree.get_command('sync',guild=tempGuild),
-                    bot.tree.get_command('crash',guild=tempGuild)
+                    bot.tree.get_command('sync', guild=tempGuild),
+                    bot.tree.get_command('crash', guild=tempGuild)
                 ]
 
             bot.tree.clear_commands(guild=tempGuild)
