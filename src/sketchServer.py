@@ -1,16 +1,16 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import asyncio, aiohttp, aiohttp.web, logging
-import sketchAuth, sketchYoutube, sketchDatabase
+import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2
+import sketchAuth, sketchYoutube, sketchDatabase, sketchDiscord
 
-# ---------- SETUP -------------------------------------------------------------------------------------------------------------
-# ---------- SETUP -------------------------------------------------------------------------------------------------------------
-# ---------- SETUP -------------------------------------------------------------------------------------------------------------
+# MARK: SETUP ------------------------------------------------------------------------------------------------------------
 
 async def summon():
     info('Summoning...')
     
     app.add_routes(routes)
+
+    app.router.add_static('/static/', path='src/static', name='static')
 
     loop = asyncio.get_event_loop()
     #  uses internal _run_app since we are managing our own loops
@@ -29,27 +29,27 @@ async def on_shutdown(app):
 
 routes = aiohttp.web.RouteTableDef()
 app = aiohttp.web.Application()
+
+aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('src/templates'))
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 session = aiohttp.ClientSession()
 
-# ---------- FUNCTIONS ---------------------------------------------------------------------------------------------------------
-# ---------- FUNCTIONS ---------------------------------------------------------------------------------------------------------
-# ---------- FUNCTIONS ---------------------------------------------------------------------------------------------------------
+# MARK: FUNCTIONS ---------------------------------------------------------------------------------------------------------
 
-# ---------- EVENTS ------------------------------------------------------------------------------------------------------------
-# ---------- EVENTS ------------------------------------------------------------------------------------------------------------
-# ---------- EVENTS ------------------------------------------------------------------------------------------------------------
+# MARK: EVENTS ------------------------------------------------------------------------------------------------------------
 
 # comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
 @routes.get('/')
+@aiohttp_jinja2.template('index.html')
 async def hello(request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
-    ' body ' + await str(request.text()))
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
 
-    return aiohttp.web.Response(status=404)
+    return {'test_name': "hiiiiii", 'gamers': ["umm", "gamer TWO"]}
 
 # redirects user to google's oauth endpoint to begin oauth flow
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#httprest_1
@@ -126,8 +126,10 @@ async def youtubeCallback(request):
 async def test(request):
     debug('Testing...')
 
-    await sketchDatabase.createDatabase()
+    # await sketchDatabase.createDatabase()
 
     # await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
 
-    return aiohttp.web.Response(text="testing", content_type="text/html")
+    result = await sketchDiscord.test()
+
+    return aiohttp.web.Response(text=result, content_type="text/html")

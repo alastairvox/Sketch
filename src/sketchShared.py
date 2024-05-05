@@ -4,6 +4,12 @@ import logging, logging.handlers
 global sketchUncaughtException
 sketchUncaughtException = None
 
+# defines a filter for discord that removes messages like "discord - GATEWAY: Shard ID None has successfully RESUMED session 1c0485fb65ae04fc3d585ac1779c23d1.""
+def filterDiscordShardResumes(record):
+    if record.getMessage().startswith('Shard ID None has successfully RESUMED session ') or 'discord - GATEWAY: Shard ID None has successfully RESUMED session ' in record.getMessage():
+        return False
+    return True
+
 # defines my own logging formatter class that manipulates module text and date format, as well as retrieves the actual raising module's name during an uncaught exception
 class SketchLogFormatter(logging.Formatter):
     # replaces default module with uppercase module, replaces "sketch" with main or removes it from prefix
@@ -143,5 +149,6 @@ critical = logging.critical
 logging.getLogger("asyncio").setLevel(logging.INFO)
 # discord SPAMS
 logging.getLogger("discord").setLevel(logging.INFO)
+logging.getLogger("discord.gateway").addFilter(filterDiscordShardResumes)
 
 dev = False

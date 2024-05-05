@@ -1,0 +1,39 @@
+{
+	"folders": [
+		{
+			"name": "sketch",
+			"path": "."
+		},
+		{
+			"name": "sketchdb",
+			"path": "../sketchdb"
+		},
+		{
+			"name": "MAX",
+			"path": "../../../mnt/d/Me/Documents/Data/Projects/MAX"
+		},
+		{
+			"path": "../fluffydb"
+		},
+		{
+			"path": "../sketch-old"
+		}
+	],
+	"settings": {
+		"sqltools.connections": [
+			{
+				"mysqlOptions": {
+					"authProtocol": "default"
+				},
+				"previewLimit": 1000,
+				"server": "localhost",
+				"port": 3306,
+				"driver": "MariaDB",
+				"name": "SKETCHDB",
+				"username": "sketch",
+				"database": "sketch",
+				"askForPassword": true
+			}
+		]
+	}
+}

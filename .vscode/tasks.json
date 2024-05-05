@@ -9,7 +9,8 @@
 				"tag": "sketch:latest",
 				"dockerfile": "${workspaceFolder}/Dockerfile",
 				"context": "${workspaceFolder}",
-				"pull": true
+				"pull": true,
+				"customOptions": "--network=host"
 			}
 		},
 		{
@@ -20,6 +21,12 @@
 			],
 			"dockerRun": {
 				"network": "sketchnet",
+				"ports": [
+					{
+						"containerPort": 8080,
+						"hostPort": 80
+					},
+				],
 				"customOptions": "--mount type=bind,source=\"$(pwd)\",target=/sketch,readonly --mount type=bind,source=\"$(pwd)\"/logs,target=/sketch/logs"
 			  },
 			"python": {

@@ -19,7 +19,7 @@ def main():
 ⣿⣿⣿⣿⣿⡇⢸⣿⠉⢻⣷⣦⣶⣶⣶⣶⣶⣴⣿⠋⢹⣿⠀⣿⣿⣿⣿⣿⣿
 ⣿⣿⣿⣿⡿⠁⣾⣿⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣾⣿⣆⠸⣿⣿⣿⣿⣿
 ⣿⣿⣿⠟⢁⣾⡿⠟⠛⠛⠿⣿⣿⣿⣿⣿⣿⣿⠿⠛⠛⠿⣿⣦⠙⢿⣿⣿⣿
-⣿⠟⣁⣴⣿⡿⠀⠀⠀⠀⠀⠈⢻⣿⣿⣿⠏⠀⠀⠀⠀⠀⠘⣿⣷⣄⡙⢻⣿    Sketch v0.01 (Roles-1)
+⣿⠟⣁⣴⣿⡿⠀⠀⠀⠀⠀⠈⢻⣿⣿⣿⠏⠀⠀⠀⠀⠀⠘⣿⣷⣄⡙⢻⣿    Sketch v1.00 (Roles+Web)
 ⣿⣄⡉⠛⢿⣷⠀⠀⢸⣦⡀⠀⠀⢿⣿⡏⠀⠀⣠⣾⠀⠀⢠⣿⠿⠋⣉⣴⣿    Seek Knowledge Everywhere, Tiny Computer Helper
 ⣿⠋⢠⣶⣿⣿⣷⣄⠘⠿⣿⡆⠀⢸⣿⠀⠀⣼⡿⠟⢀⣠⣿⣿⣷⣦⡌⢻⣿    Alastair Vox (alastairvox.com)
 ⣿⣷⣤⣈⡙⠻⣿⣿⣷⣄⠀⠻⠀⠀⣿⠀⠸⠁⢀⣴⣿⣿⡿⠟⢉⣠⣴⣾⣿
@@ -48,7 +48,8 @@ def main():
 
     # gets the current event loop or i guess creates one (there can only ever be one running event loop)
     loop = asyncio.get_event_loop()
-    # loop.run_until_complete(sketchDatabase.summon())
+    # runs this until its done, so that we can make sure the database is fully set up before all the other services run
+    loop.run_until_complete(sketchDatabase.summon())
     # schedules a task to run on the event loop next time the event loop checks for stuff, unless the event loop got closed!! (which is why we run forever, otherwise it wont even start them)
     loop.create_task(sketchServer.summon())
     loop.create_task(sketchDiscord.summon())

@@ -113,7 +113,7 @@ async def summon():
     logging.getLogger('sqlalchemy').setLevel(logging.INFO)
 
     # https://docs.sqlalchemy.org/en/20/dialects/mysql.html#module-sqlalchemy.dialects.mysql.asyncmy
-    dbEngine = create_async_engine('mariadb+asyncmy://sketch:' + sketchAuth.dbPassword + '@localhost:3306/sketch', pool_pre_ping=True, pool_recycle=3600)
+    dbEngine = create_async_engine('mariadb+asyncmy://sketch:' + sketchAuth.dbPassword + '@' + sketchAuth.dbHost + ':' + sketchAuth.dbPort + '/sketch', pool_pre_ping=True, pool_recycle=3600)
     
     # db: an async_sessionmaker factory for new AsyncSession objects.
     # expire_on_commit - don't expire objects after transaction commit
@@ -121,3 +121,5 @@ async def summon():
 
     sketchShared.dbengine = dbEngine
     sketchShared.db = db
+
+    await createDatabase()

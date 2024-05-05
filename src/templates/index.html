@@ -1,0 +1,22 @@
+{# templates/index.html #}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Test</title>
+    <link rel="stylesheet" href="static/style.css">
+    <script type="text/javascript" src="static/index.js"></script>
+</head>
+
+<body>
+    <h1>{{ test_name }} Test</h1>
+    <ul>
+        {% for gamer in gamers %}
+        <li> {{ gamer }} </li>
+        {% endfor %}
+    </ul>
+    <button onclick="testClick()"></button>
+</body>
+
+</html>
