@@ -46,10 +46,17 @@ def main():
     signal.signal(signal.SIGTERM, exitHandler)
     signal.signal(signal.SIGINT, exitHandler)
 
-    # gets the current event loop or i guess creates one (there can only ever be one running event loop)
-    loop = asyncio.get_event_loop()
+    # gets the current event loop or creates one (there can only ever be one running event loop)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        # Set it as the current event loop so that it will be returned when asyncio.get_running_loop is called:
+        asyncio.set_event_loop(loop)
+
     # runs this until its done, so that we can make sure the database is fully set up before all the other services run
     loop.run_until_complete(sketchDatabase.summon())
+
     # schedules a task to run on the event loop next time the event loop checks for stuff, unless the event loop got closed!! (which is why we run forever, otherwise it wont even start them)
     loop.create_task(sketchServer.summon())
     loop.create_task(sketchDiscord.summon())

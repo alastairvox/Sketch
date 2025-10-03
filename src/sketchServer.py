@@ -2,11 +2,14 @@ import sketchShared
 from sketchShared import debug, info, warn, error, critical
 import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2
 import sketchAuth, sketchYoutube, sketchDatabase, sketchDiscord
+from sketchModels import *
 
 # MARK: SETUP ------------------------------------------------------------------------------------------------------------
 
 async def summon():
     info('Summoning...')
+    global session
+    session = aiohttp.ClientSession()
     
     app.add_routes(routes)
 
@@ -33,7 +36,8 @@ app = aiohttp.web.Application()
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('src/templates'))
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
-session = aiohttp.ClientSession()
+global session
+
 
 # MARK: FUNCTIONS ---------------------------------------------------------------------------------------------------------
 
@@ -125,8 +129,6 @@ async def youtubeCallback(request):
 @routes.get('/test')
 async def test(request):
     debug('Testing...')
-
-    # await sketchDatabase.createDatabase()
 
     # await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
 

@@ -2,7 +2,7 @@
     "configurations": [
         {
             "name": "Python: Sketch",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "/home/me/Sketch/src/sketch.py",
             "console": "integratedTerminal",
@@ -10,7 +10,7 @@
         },
         {
             "name": "Python: File",
-            "type": "python",
+            "type": "debugpy",
             "request": "launch",
             "program": "${file}",
             "justMyCode": true
