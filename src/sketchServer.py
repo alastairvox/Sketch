@@ -175,18 +175,18 @@ async def getDiscordCodeTokens(code, state, session) -> str:
             expiryDateTime = datetime.datetime.now() + expiryDelta
             
             # store tokens, state, etc.
-            dbUser = DiscordUser(
-                id=user['id'],
-                name=user['global_name'],
-                accessToken=data.get('access_token'),
-                refreshToken=data.get('refresh_token'),
-                tokenExpiry=expiryDateTime,
-                state=state,
-                profileImageURL=f'https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png'
-                )
+            dbUser, _ = await DiscordUser.get_or_create(id=user['id'])
+            dbUser.name = user['global_name']
+            dbUser.accessToken = data.get('access_token')
+            dbUser.refreshToken = data.get('refresh_token')
+            dbUser.tokenExpiry = expiryDateTime
+            dbUser.state = state
+            dbUser.profileImageURL = f'https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png'
+            
             # Partial saves are now supported (#157): obj.save(update_fields=['model','field','names'])
             # https://github.com/tortoise/tortoise-orm/pull/165
-            await dbUser.save(update_fields=['name','accessToken','refreshToken','tokenExpiry','state','profileImageURL'])
+            # await dbUser.save(update_fields=['name','accessToken','refreshToken','tokenExpiry','state','profileImageURL'])
+            await DiscordUser.update_or_create(id=dbUser.id, defaults=dict(dbUser))
             
             session['expiryTime'] = expiryDateTime.isoformat()
             session['userID'] = user['id']
