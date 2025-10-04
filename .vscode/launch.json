@@ -28,7 +28,8 @@
                         "remoteRoot": "/sketch"
                     }
                 ],
-                "projectType": "general"
+                "projectType": "general",
+                "justMyCode": false
             }
         }
     ]

@@ -35,7 +35,13 @@ class DiscordGuild(models.Model):
 
 class DiscordUser(models.Model):
     id = UnsignedBigIntField(primary_key=True, generated=False)
-    
+    name = fields.TextField(null=True)
+    accessToken = fields.TextField(null=True)
+    refreshToken = fields.TextField(null=True)
+    tokenExpiry = fields.DatetimeField(null=True)
+    state = fields.TextField(null=True)
+    profileImageURL = fields.TextField(null=True)
+
     authorizedGuilds: fields.ManyToManyRelation["DiscordGuild"] = fields.ManyToManyField('models.DiscordGuild', related_name='authorizedUsers', through='discordauthorizedguild_user')
     
 class DiscordJoinRole(models.Model):
@@ -53,4 +59,3 @@ class TwitchAnnouncement(models.Model):
     guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='twitchAnnouncements', on_delete=fields.OnDelete.CASCADE)
     channelID = UnsignedBigIntField()
     messageID = UnsignedBigIntField()
-    

@@ -1,15 +1,72 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2
+import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_security, aiohttp_csrf, secrets, uuid, datetime
+from secrets import compare_digest
+from urllib.parse import urlencode
 import sketchAuth, sketchYoutube, sketchDatabase, sketchDiscord
 from sketchModels import *
 
 # MARK: SETUP ------------------------------------------------------------------------------------------------------------
 
+# have to override these to fix server error when not providing a header or a form body
+class SketchFormPolicy:
+    def __init__(self, field_name: str):
+        self.field_name = field_name
+
+    async def check(self, request: aiohttp.web.Request, original_value: str) -> bool:
+        get = request.match_info.get(self.field_name, None)
+        post_req = await request.post() if get is None else None
+        post = post_req.get(self.field_name) if post_req is not None else None
+        post = post if post is not None else ""
+        token = get if get is not None else post
+        if not isinstance(token, str) or token=='':
+            logging.debug("CSRF failure: Missing token on request form")
+            return False
+        
+        if not original_value:
+            logging.debug("CSRF failure: No original value comapring request form fields")
+            return False
+        
+        return compare_digest(token, original_value)
+
+class SketchHeaderPolicy:
+    def __init__(self, header_name: str):
+        self.header_name = header_name
+
+    async def check(self, request: aiohttp.web.Request, original_value: str) -> bool:
+        token = request.headers.get(self.header_name)
+        if not isinstance(token, str) or token=='':
+            logging.debug("CSRF failure: Missing token on request headers")
+            return False
+        
+        if not original_value:
+            logging.debug("CSRF failure: No original value comparing request headers")
+            return False
+        
+        return compare_digest(token, original_value)
+
+class SketchFormAndHeaderPolicy(SketchHeaderPolicy, SketchFormPolicy):
+    def __init__(self, header_name: str, field_name: str):
+        self.header_name = header_name
+        self.field_name = field_name
+
+    async def check(self, request: aiohttp.web.Request, original_value: str) -> bool:
+        header_check = await SketchHeaderPolicy.check(self, request, original_value)
+
+        if header_check:
+            return True
+
+        form_check = await SketchFormPolicy.check(self, request, original_value)
+
+        if form_check:
+            return True
+
+        return False
+
 async def summon():
     info('Summoning...')
-    global session
-    session = aiohttp.ClientSession()
+    global clientSession
+    clientSession = aiohttp.ClientSession()
     
     app.add_routes(routes)
 
@@ -17,10 +74,10 @@ async def summon():
 
     loop = asyncio.get_event_loop()
     #  uses internal _run_app since we are managing our own loops
-    loop.create_task(aiohttp.web._run_app(app, port=sketchAuth.callbackPort, print=None))
+    loop.create_task(aiohttp.web._run_app(app, port=sketchAuth.internalPort, print=None))
 
 async def on_startup(app):
-    info('Connected to HTTP server on port ' + sketchAuth.callbackPort + '.')
+    info('Connected to HTTP server on port ' + sketchAuth.internalPort + '.')
 
     # TODO disable/remove this for "production"
     logging.getLogger("aiohttp.access").setLevel(logging.WARN)
@@ -28,32 +85,205 @@ async def on_startup(app):
     # await test('')
 
 async def on_shutdown(app):
-    info('Disconnected from HTTP server on port ' + sketchAuth.callbackPort + '.')
+    info('Disconnected from HTTP server on port ' + sketchAuth.internalPort + '.')
 
 routes = aiohttp.web.RouteTableDef()
 app = aiohttp.web.Application()
 
+csrf_policy = SketchFormAndHeaderPolicy(field_name='_csrf_token', header_name='Csrf-Token')
+csrf_storage = aiohttp_csrf.storage.SessionStorage('csrf_token', secret_phrase=sketchAuth.serverSecret)
+aiohttp_csrf.setup(app, policy=csrf_policy, storage=csrf_storage)
+aiohttp_session.setup(app, aiohttp_session.cookie_storage.EncryptedCookieStorage(sketchAuth.serverURLSafeSecret, max_age=604800, httponly=True, secure=True, samesite='Lax'))
+app.middlewares.append(aiohttp_csrf.csrf_middleware)
+
 aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('src/templates'))
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
-global session
+global clientSession
 
 
 # MARK: FUNCTIONS ---------------------------------------------------------------------------------------------------------
+
+async def getSession(request) -> aiohttp_session.Session:
+    session = await aiohttp_session.get_session(request)
+    if session.new:
+        info("New session detected, creating UUID for session id...")
+        newUUID = str(uuid.uuid4())
+        session.set_new_identity(newUUID)
+        session['sessionID'] = str(newUUID)
+        session['messages'] = []
+    return session
+
+async def newSession(request) -> aiohttp_session.Session:
+    session = await aiohttp_session.new_session(request)
+    info("Creating new session for login, creating UUID for session id...")
+    newUUID = str(uuid.uuid4())
+    session.set_new_identity(newUUID)
+    session['sessionID'] = str(newUUID)
+    session['messages'] = []
+    return session
+    
+async def getMessages(session) -> list[str]:
+    if 'messages' in session and session['messages']:
+        messages = session['messages']
+        session['messages'] = []
+    else:
+        messages = []
+        
+    return messages
+
+async def getDiscordUser(accessToken):
+    debug(f'Getting ID from access token: {accessToken}')
+    baseURL = 'https://discord.com/api/users/@me'
+    headers = {
+        'Authorization': f'Bearer {accessToken}'
+    }
+    async with clientSession.get(url=baseURL, headers=headers) as resp:
+        debug(f'Received response from Discord for user from access token: {accessToken}')
+        
+        # json encoded data returned
+        data = await resp.json()
+        debug('Response: ' + str(data))
+        
+        return data
+    
+
+async def getDiscordCodeTokens(code, state, session) -> str:
+    debug(f'Getting refresh token using code: {code}')
+    baseURL = 'https://discord.com/api/oauth2/token'
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    data = {
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': sketchAuth.baseCallbackURL + 'discord/callback'
+    }
+    auth = aiohttp.BasicAuth(sketchAuth.discordClientID, sketchAuth.discordClientSecret)
+    async with clientSession.post(url=baseURL, data=data, headers=headers, auth=auth) as resp:
+        debug(f'Received response from Discord for tokens from code: {code}')
+        # json encoded access token returned
+        data = await resp.json()
+        debug('Response: ' + str(data))
+        
+        if data and data.get('refresh_token') and data.get('access_token'):
+            debug(f'refresh token: {data.get('refresh_token')}')
+            debug(f'access token: {data.get('access_token')}')
+            
+            user = await getDiscordUser(data.get('access_token'))
+            expiryDelta = datetime.timedelta(seconds=data.get('expires_in'))
+            expiryDateTime = datetime.datetime.now() + expiryDelta
+            
+            # store tokens, state, etc.
+            dbUser = DiscordUser(
+                id=user['id'],
+                name=user['global_name'],
+                accessToken=data.get('access_token'),
+                refreshToken=data.get('refresh_token'),
+                tokenExpiry=expiryDateTime,
+                state=state,
+                profileImageURL=f'https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png'
+                )
+            # Partial saves are now supported (#157): obj.save(update_fields=['model','field','names'])
+            # https://github.com/tortoise/tortoise-orm/pull/165
+            await dbUser.save(update_fields=['name','accessToken','refreshToken','tokenExpiry','state','profileImageURL'])
+            
+            session['expiryTime'] = expiryDateTime.isoformat()
+            session['userID'] = user['id']
+            
+            result = f'<b class="success">Discord successfully authorized.</b><br>Hello, {dbUser.name}!'
+        else:
+            error('Response error: either no refresh token or access token provided. (or no JSON at all)')
+            result = '<b class="error">Error: peepee poopoo no tokens</b>'
+            
+        return result
 
 # MARK: EVENTS ------------------------------------------------------------------------------------------------------------
 
 # comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
 @routes.get('/')
 @aiohttp_jinja2.template('index.html')
-async def hello(request):
+async def hello(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
     ' body ' + str(await request.text()) +
     ' thats it :)')
+    
+    session = await getSession(request)
+    messages = await getMessages(session)    
+    csrfToken = await aiohttp_csrf.generate_token(request)
+    
+    # if session has expiryTime, userID, state, and sessionID, then the user is authenticated.
+    # datetime has to come back from isoformat with fromisoformat()
 
-    return {'test_name': "hiiiiii", 'gamers': ["umm", "gamer TWO"]}
+    return {'messages': messages,'csrfToken': csrfToken, 'testName': "hiiiiii", 'gamers': ["umm", "gamer TWO"]}
+
+# start discord authentication for user
+# store the refresh token, access token, expiry time, state, and sessionid in database
+# store the expiry time, user id, and state (random code) in the encrypted session cookie (sessionid already there)
+# check the data from the cookie (session id, state, user id, expiry time) matches correctly when changing any configuration, or else clear their session data, send them to the login page
+@routes.get('/login')
+async def login(request: aiohttp.web.Request):
+    info(f'Redirecting {str(request.remote)} to Discord to begin authentication...')
+    session = await newSession(request)
+    debug(f'Session has ID {session['sessionID']}')
+    
+    session['state'] = secrets.token_urlsafe(32)
+    
+    baseURL = 'https://discord.com/oauth2/authorize'
+    
+    params = {'client_id': sketchAuth.discordClientID,
+              'scope': 'identify',
+              'response_type': 'code',
+              'redirect_uri': sketchAuth.baseCallbackURL + 'discord/callback',
+              'state': session['state'],
+              'prompt': 'none'}
+    
+    params = urlencode(params)
+    
+    # 307 response
+    raise aiohttp.web.HTTPTemporaryRedirect(location=baseURL+'?'+params)
+
+# validate state against cookie, handle code from query
+@routes.get('/discord/callback')
+async def discordCallback(request: aiohttp.web.Request):
+    info('Responding to Discord callback request.')
+    session = await getSession(request)
+    debug(f'Session has ID {session['sessionID']}')
+
+    if 'code' not in request.query or 'state' not in request.query:
+        error('Discord callback request did not contain either state or code query attributes.')
+        
+        if 'error' in request.query:
+            errorMessage = str(request.query['error'])
+            error('Error: ' + errorMessage)
+            session['messages'].append(f'<b class="error">Error: Something went wrong with Discord authorization. ({errorMessage})</b><br>Please try again, or contact alastairvox on discord.')
+            session.changed()
+            
+        else:
+            error('No error provided: attempted attack? Discord should always provide an error. Request: ' + str(request))
+            session['messages'].append('<b class="error">Error: Something went wrong with Discord authorization. (Unknown Error)</b><br>Please try again, or contact alastairvox on discord.')
+            session.changed()
+    else:
+        state = str(request.query['state'])
+        code = str(request.query['code'])
+        # validate state, then use code query attribute to request and store refresh token
+        debug(f'Request has code: {code} and state: {state}')
+        
+        debug('Validating state...')
+        if state != str(session['state']):
+            error(f'Discord callback request state mismatch. Cookie state: {str(session['state'])} and request state: {state}')
+            session['messages'].append(f'<b class="error">Error: Something went wrong with Discord authorization. (Invalid State)</b><br>Please try again, or contact alastairvox on discord.')
+            session.changed()
+        else:
+            result = await getDiscordCodeTokens(request.query['code'], request.query['state'], session)
+            session['messages'].append(result)
+            session.changed()
+    
+    # 303 response
+    raise aiohttp.web.HTTPSeeOther('/')
+
 
 # redirects user to google's oauth endpoint to begin oauth flow
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#httprest_1
@@ -75,7 +305,7 @@ async def youtubeAuth(request):
 
         raise aiohttp.web.HTTPTemporaryRedirect("https://accounts.google.com/o/oauth2/v2/auth" + 
         "?client_id=" + sketchAuth.ytClientID + 
-        "&redirect_uri=" + sketchAuth.callbackAddress + "youtube/callback" + 
+        "&redirect_uri=" + sketchAuth.baseCallbackURL + "youtube/callback" + 
         "&response_type=code" + 
         "&scope=" + scopes + 
         "&access_type=offline" + 
@@ -126,12 +356,18 @@ async def youtubeCallback(request):
     
     return aiohttp.web.Response(text=result, content_type="text/html")
 
-@routes.get('/test')
+@routes.post('/test')
 async def test(request):
     debug('Testing...')
 
     # await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
 
     result = await sketchDiscord.test()
+    
+    session = await getSession(request)
+    session['messages'].extend([result, result])
+    session.changed()
 
-    return aiohttp.web.Response(text=result, content_type="text/html")
+    debug(session)
+    
+    return aiohttp.web.HTTPSeeOther('/')

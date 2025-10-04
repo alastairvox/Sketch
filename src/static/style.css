@@ -1,4 +1,40 @@
-html {
-    font-family: Arial, sans-serif;
-    color: red;
+html, body {
+    margin: 0 !important;
+    height: 100vh;
 }
+
+body {
+    font-family: Arial, sans-serif;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+        "messages"
+        "content";
+}
+
+.messages {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    grid-area: messages;
+    font-size: 2em;
+    flex-direction: column
+}
+
+.success {
+    color: forestgreen;
+}
+
+.error {
+    color: maroon;
+}
+
+
+.container {
+    display: flex;
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+    grid-area: content;
+}
+

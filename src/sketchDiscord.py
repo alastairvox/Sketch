@@ -41,7 +41,7 @@ defaultColourHex = '#a92835'
 # MARK: FUNCTIONS ---------------------------------------------------------------------------------------------------------
 
 # test command
-async def test():
+async def test() -> str:
     debug("Test called!")
     try:
         await bot.get_channel(977628532282888202).send("test from web")

@@ -10,13 +10,28 @@
 </head>
 
 <body>
-    <h1>{{ test_name }} Test</h1>
-    <ul>
-        {% for gamer in gamers %}
-        <li> {{ gamer }} </li>
-        {% endfor %}
-    </ul>
-    <button onclick="testClick()"></button>
+
+    {% include "messages.html" %}
+    <div class="container">
+        <div>
+            <h1>{{ testName }} Test</h1>
+            <ul>
+                {% for gamer in gamers %}
+                <li> {{ gamer }} </li>
+                {% endfor %}
+            </ul>
+            <form id="testForm" method="POST" action="/test">
+                <input type="hidden" name="_csrf_token" value="{{csrfToken}}" />
+                <input type="submit" value="Test me!">
+            </form>
+            <form id="rawForm" method="POST" action="/">
+                <input type="hidden" name="_csrf_token" value="{{csrfToken}}" />
+                <input type="text" name="name" />
+                <input type="submit" value="Submit an evil form.">
+            </form>
+        </div>
+    </div>
+
 </body>
 
 </html>

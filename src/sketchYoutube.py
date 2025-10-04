@@ -41,7 +41,7 @@ async def getYoutubeTokens(code, userID):
         "&client_secret=" + sketchAuth.ytClientSecret + 
         "&code=" + code + 
         "&grant_type=authorization_code" + 
-        "&redirect_uri=" + sketchAuth.callbackAddress + "youtube/callback"
+        "&redirect_uri=" + sketchAuth.baseCallbackURL + "youtube/callback"
     ) as resp:
         debug('Received response from YouTube for refresh token.')
 
