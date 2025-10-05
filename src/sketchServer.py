@@ -1,6 +1,6 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_security, aiohttp_csrf, secrets, uuid, datetime
+import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_csrf, secrets, uuid, datetime
 from secrets import compare_digest
 from urllib.parse import urlencode
 import sketchAuth, sketchYoutube, sketchDatabase, sketchDiscord
@@ -104,7 +104,7 @@ global clientSession
 
 # MARK: FUNCTIONS ---------------------------------------------------------------------------------------------------------
 
-async def getSession(request) -> aiohttp_session.Session:
+async def getSession(request: aiohttp.web.Request) -> aiohttp_session.Session:
     session = await aiohttp_session.get_session(request)
     if session.new:
         info("New session detected, creating UUID for session id...")
@@ -114,16 +114,16 @@ async def getSession(request) -> aiohttp_session.Session:
         session['messages'] = []
     return session
 
-async def newSession(request) -> aiohttp_session.Session:
+async def newSession(request: aiohttp.web.Request) -> aiohttp_session.Session:
     session = await aiohttp_session.new_session(request)
-    info("Creating new session for login, creating UUID for session id...")
+    info("Creating new session, creating UUID for session id...")
     newUUID = str(uuid.uuid4())
     session.set_new_identity(newUUID)
     session['sessionID'] = str(newUUID)
     session['messages'] = []
     return session
     
-async def getMessages(session) -> list[str]:
+async def getMessages(session: aiohttp_session.Session) -> list[str]:
     if 'messages' in session and session['messages']:
         messages = session['messages']
         session['messages'] = []
@@ -132,6 +132,7 @@ async def getMessages(session) -> list[str]:
         
     return messages
 
+# gets discord user object from discord API
 async def getDiscordUser(accessToken):
     debug(f'Getting ID from access token: {accessToken}')
     baseURL = 'https://discord.com/api/users/@me'
@@ -146,9 +147,10 @@ async def getDiscordUser(accessToken):
         debug('Response: ' + str(data))
         
         return data
-    
 
-async def getDiscordCodeTokens(code, state, session) -> str:
+# exchanges a code token for an authentication token and refresh token from discord API
+# validates provided state variable against the one returned from discord
+async def getDiscordCodeTokens(code, state, session: aiohttp_session.Session) -> str:
     debug(f'Getting refresh token using code: {code}')
     baseURL = 'https://discord.com/api/oauth2/token'
     headers = {
@@ -172,20 +174,20 @@ async def getDiscordCodeTokens(code, state, session) -> str:
             
             user = await getDiscordUser(data.get('access_token'))
             expiryDelta = datetime.timedelta(seconds=data.get('expires_in'))
-            expiryDateTime = datetime.datetime.now() + expiryDelta
+            expiryDateTime = datetime.datetime.now(datetime.timezone.utc) + expiryDelta
             
             # store tokens, state, etc.
             dbUser, _ = await DiscordUser.get_or_create(id=user['id'])
             dbUser.name = user['global_name']
             dbUser.accessToken = data.get('access_token')
             dbUser.refreshToken = data.get('refresh_token')
-            dbUser.tokenExpiry = expiryDateTime
+            dbUser.expiryTime = expiryDateTime
             dbUser.state = state
+            dbUser.sessionID = session['sessionID']
             dbUser.profileImageURL = f'https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png'
             
             # Partial saves are now supported (#157): obj.save(update_fields=['model','field','names'])
             # https://github.com/tortoise/tortoise-orm/pull/165
-            # await dbUser.save(update_fields=['name','accessToken','refreshToken','tokenExpiry','state','profileImageURL'])
             await DiscordUser.update_or_create(id=dbUser.id, defaults=dict(dbUser))
             
             session['expiryTime'] = expiryDateTime.isoformat()
@@ -198,6 +200,50 @@ async def getDiscordCodeTokens(code, state, session) -> str:
             
         return result
 
+# validates user is logged in, validates session against database
+async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp.web.Request) -> DiscordUser | None:
+    debug(f"Validating discord authentication for session: {session}")
+    
+    # if session has expiryTime, userID, state, and sessionID, then the user is authenticated.
+    # checks if the dict is a subset of session, or in otherwords, that all of the values exist as keys
+    if {'userID', 'sessionID', 'expiryTime', 'state'} <= set(session):
+        # validate that it hasn't expired yet, and needs re-authentication
+        # datetime has to come back from stored isoformat with fromisoformat()
+        cookieExpiry = datetime.datetime.fromisoformat(session['expiryTime'])
+        oneMinAgo = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+        if cookieExpiry <= oneMinAgo:
+            # expired
+            debug(f"Date from cookie: {cookieExpiry}")
+            debug(f"Date from now: {oneMinAgo}")
+            error("Session expired.")
+            await newSession(request)
+            return None
+
+        # get the user from database
+        dbUser = await DiscordUser.get_or_none(id=session['userID'])
+        if not dbUser:
+            error("Session not expired, but userID not found in database.")
+            await newSession(request)
+            return None
+        
+        # validate that the state, expiryTime, and sessionID match
+        if session['sessionID'] != dbUser.sessionID or session['state'] != dbUser.state or session['expiryTime'] != dbUser.expiryTime.isoformat():
+            error(f"state, expiryTime, or sessionID mismatch with database user: {await dbUser.all().values()}")
+            debug(f"Cookie: {session['expiryTime']} Database: {dbUser.expiryTime.isoformat()}")
+            await newSession(request)
+            return None
+        
+        # generate a new state
+        session['state'] = secrets.token_urlsafe(32)
+        dbUser.state = session['state']
+        await dbUser.save(update_fields=['state'])
+        
+        debug(f"Created new state for authorized user: {session['state']}")
+        
+        return dbUser
+
+    error("No user variables in session.")
+    return None
 # MARK: EVENTS ------------------------------------------------------------------------------------------------------------
 
 # comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
@@ -213,23 +259,37 @@ async def hello(request: aiohttp.web.Request):
     session = await getSession(request)
     messages = await getMessages(session)    
     csrfToken = await aiohttp_csrf.generate_token(request)
-    
-    # if session has expiryTime, userID, state, and sessionID, then the user is authenticated.
-    # datetime has to come back from isoformat with fromisoformat()
+    user = await validateDiscordAuth(session, request)
 
-    return {'messages': messages,'csrfToken': csrfToken, 'testName': "hiiiiii", 'gamers': ["umm", "gamer TWO"]}
+    return {'messages': messages,'csrfToken': csrfToken, 'user': user, 'testName': "hiiiiii", 'gamers': ["umm", "gamer TWO"]}
+
+@routes.get('/login')
+@aiohttp_jinja2.template('login.html')
+async def hello(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    messages = await getMessages(session)    
+    csrfToken = await aiohttp_csrf.generate_token(request)
+    user = await validateDiscordAuth(session, request)
+
+    return {'messages': messages,'csrfToken': csrfToken, 'user': user}
 
 # start discord authentication for user
 # store the refresh token, access token, expiry time, state, and sessionid in database
 # store the expiry time, user id, and state (random code) in the encrypted session cookie (sessionid already there)
 # check the data from the cookie (session id, state, user id, expiry time) matches correctly when changing any configuration, or else clear their session data, send them to the login page
-@routes.get('/login')
+@routes.get('/discord/auth')
 async def login(request: aiohttp.web.Request):
     info(f'Redirecting {str(request.remote)} to Discord to begin authentication...')
     session = await newSession(request)
     debug(f'Session has ID {session['sessionID']}')
     
-    session['state'] = secrets.token_urlsafe(32)
+    session['state'] = secrets.token_urlsafe(32) + '::sketch::' + session['sessionID']
     
     baseURL = 'https://discord.com/oauth2/authorize'
     

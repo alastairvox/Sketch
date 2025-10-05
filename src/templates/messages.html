@@ -1,10 +1,10 @@
 {# templates/messages.html #}
 
-    {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-                <div>{{ message|safe }}</div>
-            {% endfor %}
-        </div>
-    {% else %}
-    {%endif %}
+{% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div>{{ message|safe }}</div>
+        {% endfor %}
+    </div>
+{% else %}
+{%endif %}

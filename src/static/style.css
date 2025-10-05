@@ -7,18 +7,31 @@ body {
     font-family: Arial, sans-serif;
     display: grid;
     grid-template-rows: auto 1fr;
+    grid-template-columns: auto 1fr auto;
     grid-template-areas:
-        "messages"
-        "content";
+        "navigation messages user"
+        "content content content";
+}
+.navigation {
+    display: flex;
+    flex-direction: row;
+    grid-area: navigation;
+
 }
 
 .messages {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     grid-area: messages;
     font-size: 2em;
-    flex-direction: column
+}
+
+.user {
+    grid-area: user;
+    display: grid;
+    grid-template-columns: auto auto;
 }
 
 .success {
@@ -28,7 +41,6 @@ body {
 .error {
     color: maroon;
 }
-
 
 .container {
     display: flex;

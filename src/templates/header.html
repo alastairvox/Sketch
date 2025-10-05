@@ -1,0 +1,22 @@
+{# templates/header.html #}
+
+<div class="navigation">
+    <a href="/"><img src="https://cdn.discordapp.com/avatars/1122029171942637638/baf4d093e9de2b29ce68330eb9618c38.png"></a>
+    <nav>
+        <a href="/login">Login</a>
+        {% if user %}
+            <a href="/discord">Manage</a>
+        {% else %}
+        {%endif %}
+        <a href="https://discord.com/api/oauth2/authorize?client_id=1122029171942637638&permissions=8&scope=bot%20applications.commands">Invite</a>
+    </nav>
+</div>
+{% include "messages.html" %}
+<div class="user">
+    {% if user %}
+        <div>{{ user.name|safe }}</div>
+        <img src="{{ user.profileImageURL|safe }}">
+    {% else %}
+        <div><a href="/login">Login</a></div>
+    {%endif %}
+</div>

@@ -19,7 +19,7 @@ class DiscordGuild(models.Model):
     # generated is set to True automatically on an intfield set as primarykey, which means it normally autoincrements
     id = UnsignedBigIntField(primary_key=True, generated=False)
     # utfmb4 default encoding uses 4 bytes per character, max for a varchar is 65535 bytes, so max of 16383 chars
-    name = fields.CharField(max_length=100)
+    name = fields.CharField(max_length=100, null=True)
     # the owner of the server
     owner = UnsignedBigIntField()
     
@@ -38,8 +38,9 @@ class DiscordUser(models.Model):
     name = fields.TextField(null=True)
     accessToken = fields.TextField(null=True)
     refreshToken = fields.TextField(null=True)
-    tokenExpiry = fields.DatetimeField(null=True)
+    expiryTime = fields.DatetimeField(null=True)
     state = fields.TextField(null=True)
+    sessionID = fields.TextField(null=True)
     profileImageURL = fields.TextField(null=True)
 
     authorizedGuilds: fields.ManyToManyRelation["DiscordGuild"] = fields.ManyToManyField('models.DiscordGuild', related_name='authorizedUsers', through='discordauthorizedguild_user')

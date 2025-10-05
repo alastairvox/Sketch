@@ -5,6 +5,7 @@ import discord, asyncio, traceback
 from discord import app_commands
 from discord.ext import commands
 import sketchAuth
+from sketchModels import *
 
 # MARK: SETUP -------------------------------------------------------------------------------------------------------------
 
@@ -28,7 +29,7 @@ class SketchBot(commands.Bot):
     async def on_ready(self):
         info(f'Connected as {bot.user} (ID: {self.user.id}) to "' + '", "'.join(map(str, bot.guilds)) + '"')
         # get all the guilds Sketch is connected to and check if they all have entries in the config file, if not then create a default one
-        configNewGuilds()
+        await configNewGuilds()
         # await syncAllCommands()
 
 bot = SketchBot()
@@ -55,9 +56,15 @@ async def summon():
     info("Summoning...")
     await bot.start(sketchAuth.discordBotToken, reconnect=True)
 
-# sets database defaults for guilds that sketch is in!
-def configNewGuilds():
+# sets database defaults for guilds that sketch is in and updates the owners and names of the guilds
+async def configNewGuilds():
     debug('In guilds: ' + str(bot.guilds))
+    for guild in bot.guilds:
+        # add guild to database, update name and owner id
+        await DiscordGuild.update_or_create(id=guild.id, defaults={'name': guild.name, 'owner': guild.owner_id})
+        # add owner to database, update name
+        await DiscordUser.update_or_create(id=guild.owner_id, defaults={'name': guild.owner.global_name})
+        # we dont add the guild the user owns to the list of authorized guilds, because it could change at any time and we don't have a way to separate manually authorized users from unauthorized ones
 
 # tells discord what commands my bot knows
 async def syncAllCommandsToTestServer() -> None:
@@ -754,7 +761,17 @@ class RoleButtonSelect(discord.ui.Select):
 # sets defaults when joining a new guild
 @bot.event
 async def on_guild_join(guild):
-    configNewGuilds()
+    await configNewGuilds()
+    # additionally, authorize the user that invited the bot
+    integrations = await guild.integrations()
+    for integration in integrations:
+        if isinstance(integration, discord.BotIntegration):
+            if integration.application.user.id == bot.user.id:
+                inviter = integration.user # returns a discord.User object
+                dbUser, _ = await DiscordUser.get_or_create(id=inviter.id)
+                await dbUser.authorizedGuilds.add(await DiscordGuild.get(id=guild.id))
+                break
+    
 
 # error handling for app command errors
 @bot.tree.error

@@ -11,13 +11,18 @@
 
 <body>
 
+    {% include "header.html" %}
     {% include "messages.html" %}
     
     <div class="container">
         <div>
-            <h1>Login</h1>
-            <b>Error: Something went wrong with YouTube authorization. (Unknown Error)</b>
-            <br>Please try again, or contact alastairvox on discord.
+            {% if user %}
+                <h1>You're logged in!</h1>
+                <b><a href="/discord/auth">Re-authorize with Discord</a> or <a href="/">Go home</a></b>
+            {% else %}
+                <h1>Login</h1>
+                <b><a href="/discord/auth">Authorize with Discord</a></b>
+            {%endif %}
         </div>
     </div>
 </body>
