@@ -52,11 +52,11 @@ class DiscordJoinRole(models.Model):
 class TwitchAnnouncement(models.Model):
     id = fields.IntField(primary_key=True)
     streamName = fields.CharField(max_length=100, null=False)
-    streamID = UnsignedBigIntField()
-    profileImageURL = fields.TextField()
-    offlineImageURL = fields.TextField()
+    streamID = UnsignedBigIntField(null=True)
+    profileImageURL = fields.TextField(null=True)
+    offlineImageURL = fields.TextField(null=True)
     # parse this to get any roles that should be mentioned, etc. default will be no role mention
     announcementText = fields.TextField()
-    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='twitchAnnouncements', on_delete=fields.OnDelete.CASCADE)
+    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='twitchAnnouncements', on_delete=fields.OnDelete.CASCADE, null=True)
     channelID = UnsignedBigIntField()
-    messageID = UnsignedBigIntField()
+    messageID = UnsignedBigIntField(null=True)

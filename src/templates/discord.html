@@ -1,0 +1,63 @@
+{# templates/discord.html #}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Sketch: Manage Discord</title>
+    <link rel="stylesheet" href="static/style.css">
+    <script type="text/javascript" src="static/index.js"></script>
+</head>
+
+<body>
+
+    {% include "header.html" %}
+
+    <div class="container">
+        <div>
+            <h1>Manage Guilds</h1>
+                {% if guilds %}
+                    <ul>
+                        {% for guild in guilds %}
+                            <li>
+                                <h2>{{ guild.name }}</h2>
+                                <h3>Twitch Announcements:</h3>
+                                <ul>
+                                    {% if guild.twitchAnnouncements %}
+                                        {% for announcement in guild.twitchAnnouncements %}
+                                            <li>{{ announcement.streamName }}</li>
+                                        {% endfor %}
+                                    {% else %}
+                                        <li>None</li>
+                                    {% endif %}
+                                </ul>
+                                <form id="newAnnouncementForm" method="POST" action="/discord/announcement/add">
+                                    <fieldset>
+                                        <legend><b>New Announcement:</b></legend>
+                                        <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                        <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                        <label for="streamName">Stream:</label>
+                                        <input type="text" id="streamName" name="streamName" maxlength="100" required/>
+                                        <label for="channel">Announcement channel:</label>
+                                        <select id="channel" name="channel" required>
+                                            {% if discordGuilds %}
+                                                {% for channel in discordGuilds[guild.id].text_channels %}
+                                                    <option value="{{channel.id}}">{{channel.name}}</option>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </select>
+                                        <label for="announcementText">Announce Message: <small>(To find emoji codes, type <code>\:emoji:</code> into a message!)</small></label>
+                                        <textarea id="announcementText" name="announcementText" maxlength="1900"></textarea>
+                                        <input type="submit" value="Add Announcement">
+                                    </fieldset>
+                                </form>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+        </div>
+    </div>
+
+</body>
+
+</html>

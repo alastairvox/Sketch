@@ -96,7 +96,7 @@ aiohttp_csrf.setup(app, policy=csrf_policy, storage=csrf_storage)
 aiohttp_session.setup(app, aiohttp_session.cookie_storage.EncryptedCookieStorage(sketchAuth.serverURLSafeSecret, max_age=604800, httponly=True, secure=True, samesite='Lax'))
 app.middlewares.append(aiohttp_csrf.csrf_middleware)
 
-aiohttp_jinja2.setup(app, loader=jinja2.FileSystemLoader('src/templates'))
+aiohttp_jinja2.setup(app, enable_async=True, loader=jinja2.FileSystemLoader('src/templates'))
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 global clientSession
@@ -229,7 +229,8 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
         # validate that the state, expiryTime, and sessionID match
         if session['sessionID'] != dbUser.sessionID or session['state'] != dbUser.state or session['expiryTime'] != dbUser.expiryTime.isoformat():
             error(f"state, expiryTime, or sessionID mismatch with database user: {await dbUser.all().values()}")
-            debug(f"Cookie: {session['expiryTime']} Database: {dbUser.expiryTime.isoformat()}")
+            if dbUser.expiryTime:
+                debug(f"Cookie: {session['expiryTime']} Database: {dbUser.expiryTime.isoformat()}")
             await newSession(request)
             return None
         
@@ -237,6 +238,7 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
         session['state'] = secrets.token_urlsafe(32)
         dbUser.state = session['state']
         await dbUser.save(update_fields=['state'])
+        session.changed()
         
         debug(f"Created new state for authorized user: {session['state']}")
         
@@ -244,6 +246,7 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
 
     error("No user variables in session.")
     return None
+
 # MARK: EVENTS ------------------------------------------------------------------------------------------------------------
 
 # comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
@@ -278,6 +281,65 @@ async def hello(request: aiohttp.web.Request):
     user = await validateDiscordAuth(session, request)
 
     return {'messages': messages,'csrfToken': csrfToken, 'user': user}
+
+@routes.get('/discord')
+@aiohttp_jinja2.template('discord.html')
+async def hello(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    messages = await getMessages(session)    
+    csrfToken = await aiohttp_csrf.generate_token(request)
+    user = await validateDiscordAuth(session, request)
+    
+    guilds = set()
+    discordGuilds = {}
+    if user:
+        ownedGuilds = await DiscordGuild.filter(owner=user.id)
+        for guild in ownedGuilds:
+            await guild.fetch_related('twitchAnnouncements')
+            await guild.fetch_related('authorizedUsers')
+            await guild.fetch_related('joinRoles')
+            discordGuilds[guild.id] = sketchDiscord.bot.get_guild(guild.id)
+            guilds.add(guild)
+        for guild in await user.authorizedGuilds.all():
+            await guild.fetch_related('twitchAnnouncements')
+            await guild.fetch_related('authorizedUsers')
+            await guild.fetch_related('joinRoles')
+            discordGuilds[guild.id] = sketchDiscord.bot.get_guild(guild.id)
+            guilds.add(guild)
+
+    return {'messages': messages,'csrfToken': csrfToken, 'user': user, 'guilds': guilds, 'discordGuilds': discordGuilds}
+
+@routes.post('/discord/announcement/add')
+async def addDiscordAnnouncement(request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        # get the streamID, profileImageURL, and offlineImageURL from twitchio
+        # refresh the profileImageURL and offlineImageURL every announcement
+        
+        
+        dbGuild = await DiscordGuild.get(id=data['guild'])
+        await TwitchAnnouncement.create(streamName=data['streamName'],
+                                        announcementText=data['announcementText'],
+                                        guild=dbGuild,
+                                        channelID=data['channel'])
+        session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data['streamName']}')
+        
+    return aiohttp.web.HTTPSeeOther('/discord')
 
 # start discord authentication for user
 # store the refresh token, access token, expiry time, state, and sessionid in database
