@@ -25,6 +25,7 @@ class DiscordGuild(models.Model):
     
     deleteOldAnnouncements = fields.BooleanField(default=False)
     spamProtectionAnnounceDelay = fields.IntField(default=10)
+    timeZone = fields.CharField(max_length=100, default='US/Central')
     
     # https://stackoverflow.com/questions/63221321/discord-py-how-to-get-the-user-who-invited-added-the-bot-to-his-server-soluti
     # https://discordpy.readthedocs.io/en/latest/api.html?highlight=discord%20guild%20integrations#discord.Guild.integrations

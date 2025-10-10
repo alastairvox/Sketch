@@ -72,7 +72,7 @@ async def notifyStreams(streams: list[twitchio.Stream]):
     games = []
     users = []
     for stream in streams:
-        streamIDs.append(stream.id)
+        streamIDs.append(stream.user.id)
         
     for announcement in await TwitchAnnouncement.filter(streamID__not_isnull=True):
         messageID = announcement.messageID
@@ -119,7 +119,7 @@ async def notifyStreams(streams: list[twitchio.Stream]):
     for stream in streamsToAnnounce: 
         game = {'name': 'No Game or Unknown'}
         for gameResponse in games:
-            if stream['twitchioStream'].id == gameResponse.id:
+            if stream['twitchioStream'].game_id == gameResponse.id:
                 game = gameResponse
                 break
         info(stream['dbStream'].streamName + ' is live unannounced...')

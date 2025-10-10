@@ -329,9 +329,10 @@ async def addDiscordAnnouncement(request):
     
     if user:
         data = await request.post()
+        debug(data)
         # TODO get the streamID from twitchio
         # refresh the profileImageURL and offlineImageURL every announcement (in twitchio)
-        streamUser = await sketchTwitch.bot.fetch_user(streamName=data['streamName'])
+        streamUser = await sketchTwitch.bot.fetch_user(login=data['streamName'])
         if not streamUser:
             # no channel by that name, error
             session['messages'].append(f'<b class="error">Failed creating Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')

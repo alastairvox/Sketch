@@ -1,7 +1,7 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
 from typing import Any, Optional, Literal, List, Union
-import discord, asyncio, traceback
+import discord, asyncio, traceback, dateutil.parser, pytz
 from discord import app_commands
 from discord.ext import commands
 import sketchAuth
@@ -17,7 +17,7 @@ class SketchBot(commands.Bot):
         # subscribe to intents so that you can recieve information
         intents = discord.Intents.all()
         # passing an empty list as the command prefix disables text commands :)
-        super().__init__(command_prefix=[], intents=intents, case_insensitive=True, status='a friend')
+        super().__init__(command_prefix=[], intents=intents, case_insensitive=True, status='a friend', allowed_mentions=discord.AllowedMentions.all())
 
     async def setup_hook(self) -> None:
         # lists here are faster than a set because they will need to be fully iterated when removing a role, and are generally small (<25) so "if message in list" will be fast enough
@@ -87,12 +87,55 @@ def isOwner(interaction: discord.Interaction) -> bool:
     return interaction.user.id == sketchAuth.discordOwner
 
 # TODO removeAnnouncement
-async def removeAnnouncement():
+async def removeAnnouncement(announcement, stream):
     pass
 
 # TODO makeAnnouncement
-async def makeAnnouncement():
-    pass
+async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
+    # no more streamRole, just send the announce message
+    # no more botChannel (unless i want a special override). old message: \nIf you don't want these notifications, go to " + botChannel.mention + " and type ``" + prefix + "notify``.
+    await dbStream.fetch_related('guild')
+    timeZone = dbStream.guild.timeZone
+    # no more prefix, only app commands
+    # profileURL is in the dbStream at profileImageURL
+    profileURL = dbStream.profileImageURL
+    # no more overrideRole
+
+    # get objects from discord api
+    guild = bot.get_guild(dbStream.guild.id)
+
+    announceChannel = guild.get_channel(dbStream.channelID)
+
+    # get date/convert date from UTC
+    date = dateutil.parser.parse(str(twitchioStream.started_at))
+    newTZ = pytz.timezone(timeZone)
+    newDate = date.replace(tzinfo=pytz.utc).astimezone(newTZ)
+    date = newTZ.normalize(newDate) # .normalize might be unnecessary
+    dateString = date.strftime("%#I:%M %p (%Z)")
+
+    # text content
+    message = dbStream.announcementText
+
+    # embed content
+    embed = discord.Embed()
+    embed.title = 'https://twitch.tv/' + twitchioStream.user.name
+    embed.url = embed.title
+    embed.colour = 6570404
+    embed.timestamp = date
+    embed.set_footer(text='Started')
+    embed.set_image(url=twitchioStream.thumbnail.base_url.replace('-{width}x{height}', ''))
+    embed.set_author(name=twitchioStream.title, url='https://twitch.tv/' + twitchioStream.user.name, icon_url=profileURL)
+    if game and game.box_art:
+        embed.set_thumbnail(url=game.box_art.base_url.replace('-{width}x{height}', '').replace('/ttv-boxart/./', '/ttv-boxart/'))
+    else:
+        embed.set_thumbnail(url='https://static-cdn.jtvnw.net/ttv-static/404_boxart.jpg')
+    embed.add_field(name='Started',value=dateString, inline=True)
+    embed.add_field(name='Playing',value=game.name, inline=True)
+
+    sent = await announceChannel.send(message, embed=embed)
+    debug(f'Sent message to {str(announceChannel.guild)}: {sent}')
+    dbStream.messageID = sent.id
+    await dbStream.save(update_fields=['messageID'])
 
 # takes a space delimited list of discord guild ids and turns them into generic discord objects
 class GuildListTransformer(app_commands.Transformer):
