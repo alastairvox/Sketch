@@ -3,7 +3,8 @@ from sketchShared import debug, info, warn, error, critical
 import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_csrf, secrets, uuid, datetime
 from secrets import compare_digest
 from urllib.parse import urlencode
-import sketchAuth, sketchYoutube, sketchDatabase, sketchDiscord
+from typing import Optional
+import sketchAuth, sketchYoutube, sketchDiscord
 from sketchModels import *
 
 # MARK: SETUP ------------------------------------------------------------------------------------------------------------
@@ -328,9 +329,8 @@ async def addDiscordAnnouncement(request):
     
     if user:
         data = await request.post()
-        # get the streamID, profileImageURL, and offlineImageURL from twitchio
+        # TODO get the streamID, profileImageURL, and offlineImageURL from twitchio
         # refresh the profileImageURL and offlineImageURL every announcement
-        
         
         dbGuild = await DiscordGuild.get(id=data['guild'])
         await TwitchAnnouncement.create(streamName=data['streamName'],

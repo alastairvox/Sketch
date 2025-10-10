@@ -60,3 +60,4 @@ class TwitchAnnouncement(models.Model):
     guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='twitchAnnouncements', on_delete=fields.OnDelete.CASCADE, null=True)
     channelID = UnsignedBigIntField()
     messageID = UnsignedBigIntField(null=True)
+    ended = fields.DatetimeField(null=True)

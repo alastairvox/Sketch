@@ -39,6 +39,11 @@ failColour = discord.Colour.from_str('#2c3843')
 defaultColour = discord.Colour.from_str('#a92835')
 defaultColourHex = '#a92835'
 
+# starts the bot when called
+async def summon():
+    info("Summoning...")
+    await bot.start(sketchAuth.discordBotToken, reconnect=True)
+
 # MARK: FUNCTIONS ---------------------------------------------------------------------------------------------------------
 
 # test command
@@ -50,11 +55,6 @@ async def test() -> str:
         warn("Error: " + str(e))
         return "Error: " + str(e)
     return "Success!"
-
-# starts the bot when called
-async def summon():
-    info("Summoning...")
-    await bot.start(sketchAuth.discordBotToken, reconnect=True)
 
 # sets database defaults for guilds that sketch is in and updates the owners and names of the guilds
 async def configNewGuilds():
@@ -85,6 +85,14 @@ async def syncAllCommands() -> None:
 # generic test to see if interaction user is ME
 def isOwner(interaction: discord.Interaction) -> bool:
     return interaction.user.id == sketchAuth.discordOwner
+
+# TODO removeAnnouncement
+async def removeAnnouncement():
+    pass
+
+# TODO makeAnnouncement
+async def makeAnnouncement():
+    pass
 
 # takes a space delimited list of discord guild ids and turns them into generic discord objects
 class GuildListTransformer(app_commands.Transformer):
