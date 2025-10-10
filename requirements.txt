@@ -8,3 +8,4 @@ aiohttp_security>=0.5.0
 aiohttp_csrf2>=1.0.1
 tortoise-orm[asyncmy]>=0.25.1
 asyncmy>=0.2.8
+twitchio>=3.1.0

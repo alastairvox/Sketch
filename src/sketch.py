@@ -60,6 +60,7 @@ def main():
     # schedules a task to run on the event loop next time the event loop checks for stuff, unless the event loop got closed!! (which is why we run forever, otherwise it wont even start them)
     loop.create_task(sketchServer.summon())
     loop.create_task(sketchDiscord.summon())
+    loop.create_task(sketchTwitch.summon())
     # makes the event loop run forever (this is blocking), so any current and future scheduled tasks will run until we explicitly tell the loop to die with loop.stop()
     loop.run_forever()
 

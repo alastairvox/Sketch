@@ -12,7 +12,8 @@ bot = twitchio.ext.commands.Bot(
         client_id=sketchAuth.twitchClientID,
         client_secret=sketchAuth.twitchClientSecret,
         bot_id=sketchAuth.twitchBotID,
-        owner_id=sketchAuth.twitchOwnerID
+        owner_id=sketchAuth.twitchOwnerID,
+        prefix='!'
     )
 
 # starts the bot when called

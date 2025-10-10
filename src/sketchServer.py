@@ -4,7 +4,7 @@ import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_s
 from secrets import compare_digest
 from urllib.parse import urlencode
 from typing import Optional
-import sketchAuth, sketchYoutube, sketchDiscord
+import sketchAuth, sketchYoutube, sketchDiscord, sketchTwitch
 from sketchModels import *
 
 # MARK: SETUP ------------------------------------------------------------------------------------------------------------
@@ -329,15 +329,20 @@ async def addDiscordAnnouncement(request):
     
     if user:
         data = await request.post()
-        # TODO get the streamID, profileImageURL, and offlineImageURL from twitchio
-        # refresh the profileImageURL and offlineImageURL every announcement
-        
-        dbGuild = await DiscordGuild.get(id=data['guild'])
-        await TwitchAnnouncement.create(streamName=data['streamName'],
-                                        announcementText=data['announcementText'],
-                                        guild=dbGuild,
-                                        channelID=data['channel'])
-        session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data['streamName']}')
+        # TODO get the streamID from twitchio
+        # refresh the profileImageURL and offlineImageURL every announcement (in twitchio)
+        streamUser = await sketchTwitch.bot.fetch_user(streamName=data['streamName'])
+        if not streamUser:
+            # no channel by that name, error
+            session['messages'].append(f'<b class="error">Failed creating Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')
+        else:
+            dbGuild = await DiscordGuild.get(id=data['guild'])
+            await TwitchAnnouncement.create(streamName=data['streamName'],
+                                            streamID=streamUser.id,
+                                            announcementText=data['announcementText'],
+                                            guild=dbGuild,
+                                            channelID=data['channel'])
+            session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data['streamName']}')
         
     return aiohttp.web.HTTPSeeOther('/discord')
 
