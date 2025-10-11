@@ -1,6 +1,6 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import twitchio, twitchio.ext.commands, asyncio, traceback
+import twitchio, twitchio.ext.commands, asyncio, traceback, logging
 import sketchAuth, sketchDiscord
 from sketchModels import *
 
@@ -15,6 +15,8 @@ bot = twitchio.ext.commands.Bot(
         owner_id=sketchAuth.twitchOwnerID,
         prefix='!'
     )
+
+logging.getLogger("twitchio").setLevel(logging.INFO)
 
 # starts the bot when called
 async def summon():
@@ -93,7 +95,7 @@ async def notifyStreams(streams: list[twitchio.Stream]):
             # if the stream doesn't have an "ended" attribute, then it isn't being delayed due to spam ping protection, so log that it's newly offline
             if not announcement.ended:
                 info(announcement.streamName + ' went offline...')
-            await sketchDiscord.removeAnnouncement(announcement, stream)
+            await sketchDiscord.removeAnnouncement(announcement)
         elif messageID and streamID in streamIDs and announcement.ended:
             # going live, but there's an "ended" entry for the stream, so removal was being delayed due to spam ping protection and they went live again within the time limit
             info(announcement.streamName + ' went live again within grace period.')

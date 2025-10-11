@@ -26,7 +26,7 @@ async def summon():
     info('Summoning...')
 
     # https://tortoise.github.io/logging.html
-    logging.getLogger("tortoise.db_client").setLevel(logging.DEBUG)
-    logging.getLogger("tortoise").setLevel(logging.DEBUG)
+    logging.getLogger("tortoise.db_client").setLevel(logging.INFO)
+    logging.getLogger("tortoise").setLevel(logging.INFO)
     
     await init()

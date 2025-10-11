@@ -24,8 +24,15 @@
                                 <h3>Twitch Announcements:</h3>
                                 <ul>
                                     {% if guild.twitchAnnouncements %}
+                                        {# TODO add a delete button / post to a delete endpoint to remove one of these #}
                                         {% for announcement in guild.twitchAnnouncements %}
-                                            <li>{{ announcement.streamName }}</li>
+                                            {% set ns = namespace(currentChannelName='') %}
+                                            {% for channel in discordGuilds[guild.id].text_channels %}
+                                                {% if channel.id == announcement.channelID %}
+                                                    {% set ns.currentChannelName = channel.name %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            <li>{{ announcement.streamName }} (#{{ ns.currentChannelName|e }}): "{{ announcement.announcementText|e }}"</li>
                                         {% endfor %}
                                     {% else %}
                                         <li>None</li>
@@ -46,7 +53,11 @@
                                                 {% endfor %}
                                             {% endif %}
                                         </select>
-                                        <label for="announcementText">Announce Message: <small>(To find emoji codes, type <code>\:emoji:</code> into a message!)</small></label>
+                                        <label for="announcementText">
+                                            Announce Message:
+                                            <br>
+                                            <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by putting <code>\:CUSTOM_EMOJI:</code> into a message on Discord!)</small>
+                                        </label>
                                         <textarea id="announcementText" name="announcementText" maxlength="1900"></textarea>
                                         <input type="submit" value="Add Announcement">
                                     </fieldset>
