@@ -248,6 +248,22 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
     error("No user variables in session.")
     return None
 
+async def checkAuthorized(user: DiscordUser, guildID) -> bool:
+    debug(f"Checking authorization for discord user: {user} and guild: {guildID}")
+    
+    dbGuild = await DiscordGuild.get(id=guildID)
+    authorized = False
+    if user.id == dbGuild.owner:
+        authorized = True
+    else:
+        await dbGuild.fetch_related("authorizedUsers")
+        for authorizedUser in dbGuild.authorizedUsers:
+            if user.id == authorizedUser.id:
+                authorized = True
+                break
+
+    return authorized
+
 # MARK: EVENTS ------------------------------------------------------------------------------------------------------------
 
 # comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
@@ -330,23 +346,95 @@ async def addDiscordAnnouncement(request):
     if user:
         data = await request.post()
         debug(data)
-        # TODO get the streamID from twitchio
-        # refresh the profileImageURL and offlineImageURL every announcement (in twitchio)
-        streamUser = await sketchTwitch.bot.fetch_user(login=data['streamName'])
-        if not streamUser:
-            # no channel by that name, error
-            session['messages'].append(f'<b class="error">Failed creating Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')
+        
+        authorized = await checkAuthorized(user, data['guild'])
+        
+        if not authorized:
+            session['messages'].append(f'''<b class="error">Failed creating Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
         else:
-            dbGuild = await DiscordGuild.get(id=data['guild'])
-            await TwitchAnnouncement.create(streamName=data['streamName'],
-                                            streamID=streamUser.id,
-                                            announcementText=data['announcementText'],
-                                            guild=dbGuild,
-                                            channelID=data['channel'])
-            session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data['streamName']}')
+            streamUser = await sketchTwitch.bot.fetch_user(login=data['streamName'])
+            if not streamUser:
+                # no channel by that name, error
+                session['messages'].append(f'<b class="error">Failed creating Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')
+            else:
+                dbGuild = await DiscordGuild.get(id=data['guild'])
+                await TwitchAnnouncement.create(streamName=data['streamName'],
+                                                streamID=streamUser.id,
+                                                announcementText=data['announcementText'],
+                                                guild=dbGuild,
+                                                channelID=data['channel'])
+                session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data['streamName']}')
         
     return aiohttp.web.HTTPSeeOther('/discord')
 
+@routes.post('/discord/announcement/delete')
+async def addDiscordAnnouncement(request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        announcement = await TwitchAnnouncement.get_or_none(id=data['announcementID'])
+        if not announcement:
+            session['messages'].append(f'<b class="error">Failed deleting Twitch announcement. (Invalid announcement ID.)</b><br>Please try again, or contact alastairvox on discord.')
+        else:
+            await announcement.fetch_related('guild')
+            authorized = await checkAuthorized(user, announcement.guild.id)
+    
+            if not authorized:
+                session['messages'].append(f'''<b class="error">Failed editing Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+            else:
+                await announcement.delete()
+                session['messages'].append(f'<b class="success">Twitch announcement deleted.</b><br>Stream: {data['streamName']}')
+            
+    return aiohttp.web.HTTPSeeOther('/discord')
+    
+@routes.post('/discord/announcement/edit')
+async def addDiscordAnnouncement(request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        announcement = await TwitchAnnouncement.get_or_none(id=data['announcementID'])
+        if not announcement:
+            session['messages'].append(f'<b class="error">Failed editing Twitch announcement. (Invalid announcement ID.)</b><br>Please try again, or contact alastairvox on discord.')
+        else:
+            streamUser = await sketchTwitch.bot.fetch_user(login=data['streamName'])
+            if not streamUser:
+                # no channel by that name, error
+                session['messages'].append(f'<b class="error">Failed editing Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')
+            else:
+                await announcement.fetch_related('guild')
+                authorized = await checkAuthorized(user, announcement.guild.id)
+        
+                if not authorized:
+                    session['messages'].append(f'''<b class="error">Failed editing Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+                else:
+                    announcement.streamName=data['streamName']
+                    announcement.streamID=streamUser.id
+                    announcement.announcementText=data['announcementText']
+                    announcement.channelID=data['channel']
+                    await announcement.save()
+                    session['messages'].append(f'<b class="success">Twitch announcement edited.</b><br>Stream: {data['streamName']}')
+
+    return aiohttp.web.HTTPSeeOther('/discord')
 # start discord authentication for user
 # store the refresh token, access token, expiry time, state, and sessionid in database
 # store the expiry time, user id, and state (random code) in the encrypted session cookie (sessionid already there)

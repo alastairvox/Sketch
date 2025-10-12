@@ -32,13 +32,26 @@
                                                     {% set ns.currentChannelName = channel.name %}
                                                 {% endif %}
                                             {% endfor %}
-                                            <li>{{ announcement.streamName }} (#{{ ns.currentChannelName|e }}): "{{ announcement.announcementText|e }}"</li>
+                                            <li><form id="{{announcement.id}}-manageAnnouncementForm" class="manageAnnouncementForm" method="POST" action="/discord/announcement/delete">
+                                                <fieldset>
+                                                    <legend><b>{{ announcement.streamName }}:</b></legend>
+                                                    <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                    <input type="hidden" name="announcementID" value="{{announcement.id}}"/>
+                                                    <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                    <input type="hidden" name="streamName" value="{{announcement.streamName}}"/>
+                                                    <span>
+                                                        #{{ ns.currentChannelName|e }}: {{ announcement.announcementText|e }}
+                                                        <button data-guild="{{guild.id}}" data-channel="{{announcement.channelID}}" data-announcement="{{announcement.id}}" type="button" value="Edit" onclick="editAnnouncement(this)">Edit</button>
+                                                        <input type="submit" value="Delete">
+                                                    </span>
+                                                </fieldset>
+                                            </form></li>
                                         {% endfor %}
                                     {% else %}
                                         <li>None</li>
                                     {% endif %}
                                 </ul>
-                                <form id="newAnnouncementForm" method="POST" action="/discord/announcement/add">
+                                <form id="{{guild.id}}-newAnnouncementForm" method="POST" action="/discord/announcement/add">
                                     <fieldset>
                                         <legend><b>New Announcement:</b></legend>
                                         <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>

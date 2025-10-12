@@ -74,3 +74,12 @@ textarea {
   field-sizing: content;
   resize: both;
 }
+
+.manageAnnouncementForm input, .manageAnnouncementForm button {
+    float: right;
+}
+
+.buttonContainer {
+    display: grid;
+    grid-auto-flow: column;
+}
