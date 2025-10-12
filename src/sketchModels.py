@@ -48,6 +48,7 @@ class DiscordUser(models.Model):
     
 class DiscordJoinRole(models.Model):
     id = UnsignedBigIntField(primary_key=True, generated=False)
+    name = fields.TextField(null=True)
     guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='joinRoles', on_delete=fields.OnDelete.CASCADE)
         
 class TwitchAnnouncement(models.Model):

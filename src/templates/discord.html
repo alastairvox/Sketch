@@ -21,10 +21,10 @@
                         {% for guild in guilds %}
                             <li>
                                 <h2>{{ guild.name }}</h2>
+                                {# TODO list config options for joinroles, re-announce delay, deleting or editing past announcements, timezone, and authorized users #}
                                 <h3>Twitch Announcements:</h3>
                                 <ul>
                                     {% if guild.twitchAnnouncements %}
-                                        {# TODO add a delete button / post to a delete endpoint to remove one of these #}
                                         {% for announcement in guild.twitchAnnouncements %}
                                             {% set ns = namespace(currentChannelName='') %}
                                             {% for channel in discordGuilds[guild.id].text_channels %}

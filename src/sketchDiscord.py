@@ -911,7 +911,8 @@ class RoleButtonSelect(discord.ui.Select):
 
 # sets defaults when joining a new guild
 @bot.event
-async def on_guild_join(guild):
+async def on_guild_join(guild: discord.Guild):
+    info(f"Joined new guild: {guild.name}.")
     await configNewGuilds()
     # additionally, authorize the user that invited the bot
     integrations = await guild.integrations()
@@ -922,7 +923,34 @@ async def on_guild_join(guild):
                 dbUser, _ = await DiscordUser.get_or_create(id=inviter.id)
                 await dbUser.authorizedGuilds.add(await DiscordGuild.get(id=guild.id))
                 break
-    
+
+@bot.event
+async def on_guild_update(before: discord.Guild, after: discord.Guild):
+    if before.owner_id != after.owner_id:
+        info(f"Guild updated owner: {after.name}.")
+        await DiscordGuild.update_or_create(id=after.id, defaults={'name': after.name, 'owner': after.owner_id})
+        await DiscordUser.update_or_create(id=after.owner_id, defaults={'name': after.owner.global_name})
+
+@bot.event
+async def on_guild_remove(guild: discord.Guild):
+    info(f"Left guild: {guild.name}.")
+    dbGuild = await DiscordGuild.get_or_none(id=guild.id)
+    # twitch announcements and joinRoles should be deleted by the database ondelete cascade automatically
+    # async for announcement in dbGuild.twitchAnnouncements:
+    #     await announcement.delete()
+    if dbGuild:
+        dbGuild.delete()
+
+# on member join give stream role
+@bot.event
+async def on_member_join(member: discord.Member):
+    dbGuild = await DiscordGuild.get_or_none(id=member.guild.id)
+    if dbGuild:
+        async for role in dbGuild.joinRoles:
+            role = member.guild.get_role(role.id)
+            if role:
+                debug(f'New member {str(member)} ({str(member.id)}) joined server "{str(member.guild)}", giving them role {str(role.name)} ({str(role.id)}).')
+                member.add_roles(role)
 
 # error handling for app command errors
 @bot.tree.error
