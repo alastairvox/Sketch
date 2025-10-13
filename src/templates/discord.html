@@ -19,63 +19,153 @@
                 {% if guilds %}
                     <ul>
                         {% for guild in guilds %}
-                            <li>
-                                <h2>{{ guild.name }}</h2>
-                                {# TODO list config options for joinroles, re-announce delay, deleting or editing past announcements, timezone, and authorized users #}
-                                <h3>Twitch Announcements:</h3>
-                                <ul>
-                                    {% if guild.twitchAnnouncements %}
-                                        {% for announcement in guild.twitchAnnouncements %}
-                                            {% set ns = namespace(currentChannelName='') %}
-                                            {% for channel in discordGuilds[guild.id].text_channels %}
-                                                {% if channel.id == announcement.channelID %}
-                                                    {% set ns.currentChannelName = channel.name %}
-                                                {% endif %}
-                                            {% endfor %}
-                                            <li><form id="{{announcement.id}}-manageAnnouncementForm" class="manageAnnouncementForm" method="POST" action="/discord/announcement/delete">
-                                                <fieldset>
-                                                    <legend><b>{{ announcement.streamName }}:</b></legend>
-                                                    <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
-                                                    <input type="hidden" name="announcementID" value="{{announcement.id}}"/>
-                                                    <input type="hidden" name="guild" value="{{guild.id}}"/>
-                                                    <input type="hidden" name="streamName" value="{{announcement.streamName}}"/>
-                                                    <span>
-                                                        #{{ ns.currentChannelName|e }}: {{ announcement.announcementText|e }}
-                                                        <button data-guild="{{guild.id}}" data-channel="{{announcement.channelID}}" data-announcement="{{announcement.id}}" type="button" value="Edit" onclick="editAnnouncement(this)">Edit</button>
-                                                        <input type="submit" value="Delete">
-                                                    </span>
-                                                </fieldset>
-                                            </form></li>
-                                        {% endfor %}
-                                    {% else %}
-                                        <li>None</li>
-                                    {% endif %}
-                                </ul>
-                                <form id="{{guild.id}}-newAnnouncementForm" method="POST" action="/discord/announcement/add">
+                            {# TODO list config options for joinroles, re-announce delay, deleting or editing past announcements, timezone, and authorized users #}
+                            <li><form id="{{guild.id}}-manageGuildForm" class="manageGuildForm" method="POST" action="/discord/config">
                                     <fieldset>
-                                        <legend><b>New Announcement:</b></legend>
+                                        <legend><b>{{ guild.name }} Configuration</b></legend>
                                         <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
                                         <input type="hidden" name="guild" value="{{guild.id}}"/>
-                                        <label for="streamName">Stream:</label>
-                                        <input type="text" id="streamName" name="streamName" maxlength="100" required/>
-                                        <label for="channel">Announcement channel:</label>
-                                        <select id="channel" name="channel" required>
-                                            {% if discordGuilds %}
-                                                {% for channel in discordGuilds[guild.id].text_channels %}
-                                                    <option value="{{channel.id}}">{{channel.name}}</option>
-                                                {% endfor %}
-                                            {% endif %}
+                                        <label for="timeZone">Server Time Zone: <small>(like <a href="https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568"><code>US/Central</code></a>)</small></label>
+                                        <input type="text" id="timeZone" name="timeZone" value="{{guild.timeZone}}">
+                                        <label for="deleteOldAnnouncements">Edit or delete old announcements:</label>
+                                        <select id="deleteOldAnnouncements" name="deleteOldAnnouncements">
+                                            <option value="False"{% if not guild.deleteOldAnnouncements %} selected{% endif %}>Edit</option>
+                                            <option value="True"{% if guild.deleteOldAnnouncements %} selected{% endif %}>Delete</option>
                                         </select>
-                                        <label for="announcementText">
-                                            Announce Message:
-                                            <br>
-                                            <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by putting <code>\:CUSTOM_EMOJI:</code> into a message on Discord!)</small>
-                                        </label>
-                                        <textarea id="announcementText" name="announcementText" maxlength="1900"></textarea>
-                                        <input type="submit" value="Add Announcement">
+                                        <label for="spamProtectionAnnounceDelay">Announce spam/offline delay: <small>(minutes)</small></label>
+                                        <input type="number" id="spamProtectionAnnounceDelay" name="spamProtectionAnnounceDelay" value="{{guild.spamProtectionAnnounceDelay}}">
+                                        <input type="submit" value="Update">
                                     </fieldset>
                                 </form>
+                                <ul>
+                                    <li><h3>Authorized Users:</h3>
+                                        <ul>
+                                            {% if guild.authorizedUsers %}
+                                                {% for user in guild.authorizedUsers %}
+                                                    <li><form id="{{guild.id}}-{{user.id}}-manageAuthForm" class="manageAuthForm" method="POST" action="/discord/authorizedUser/delete">
+                                                        <fieldset>
+                                                            <legend><b>{{ user.name }}</b></legend>
+                                                            <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                            <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                            <input type="hidden" name="userID" value="{{user.id}}"/>
+                                                            <input type="submit" value="Delete">
+                                                        </fieldset>
+                                                    </form></li>
+                                                {% endfor %}
+                                            {% else %}
+                                                <li>None</li>
+                                            {% endif %}
+                                            <li><form id="{{guild.id}}-newAuthForm" method="POST" action="/discord/authorizedUser/add">
+                                                <details><summary>Add Authorized Users</summary>
+                                                    <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                    <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                    <label for="users">Users: <small>(ctrl+click or click+drag to select multiple)</small></label>
+                                                    <br>
+                                                    <select id="users" name="users" size="15" multiple required>
+                                                        {% if discordGuilds %}
+                                                            {% for member in discordGuilds[guild.id].members %}
+                                                                <option value="{{member.id}}">{{member.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <input type="submit" value="Add Users">
+                                                </details>
+                                            </form></li>
+                                        </ul>
+                                    </li>
+                                    <li><h3>Join Roles:</h3>
+                                        <ul>
+                                            {% if guild.joinroles %}
+                                                {% for role in guild.joinRoles %}
+                                                    <li><form id="{{guild.id}}-{{role.id}}-manageJoinRoleForm" class="manageJoinRoleForm" method="POST" action="/discord/joinRole/delete">
+                                                        <fieldset>
+                                                            <legend><b>{{ role.name }}</b></legend>
+                                                            <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                            <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                            <input type="hidden" name="roleID" value="{{role.id}}"/>
+                                                            <input type="submit" value="Delete">
+                                                        </fieldset>
+                                                    </form></li>
+                                                {% endfor %}
+                                            {% else %}
+                                                <li>None</li>
+                                            {% endif %}
+                                            <li><form id="{{guild.id}}-newJoinRoleForm" method="POST" action="/discord/joinRole/add">
+                                                <details><summary>Add Join Roles</summary>
+                                                    <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                    <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                    <label for="roles">Roles: <small>(ctrl+click or click+drag to select multiple)</small></label>
+                                                    <br>
+                                                    <select id="roles" name="roles" size="15" multiple required>
+                                                        {% if discordGuilds %}
+                                                            {% for role in discordGuilds[guild.id].roles %}
+                                                                <option value="{{role.id}}">{{role.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <input type="submit" value="Add Roles">
+                                                </details>
+                                            </form></li>
+                                        </ul>
+                                    </li>
+                                    <li><h3>Twitch Announcements:</h3>
+                                        <ul>
+                                            {% if guild.twitchAnnouncements %}
+                                                {% for announcement in guild.twitchAnnouncements %}
+                                                    {% set ns = namespace(currentChannelName='') %}
+                                                    {% for channel in discordGuilds[guild.id].text_channels %}
+                                                        {% if channel.id == announcement.channelID %}
+                                                            {% set ns.currentChannelName = channel.name %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                    <li><form id="{{announcement.id}}-manageAnnouncementForm" class="manageAnnouncementForm" method="POST" action="/discord/announcement/delete">
+                                                        <fieldset>
+                                                            <legend><b>{{ announcement.streamName }}</b></legend>
+                                                            <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                            <input type="hidden" name="announcementID" value="{{announcement.id}}"/>
+                                                            <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                            <input type="hidden" name="streamName" value="{{announcement.streamName}}"/>
+                                                            <span>
+                                                                #{{ ns.currentChannelName|e }}: {{ announcement.announcementText|e }}
+                                                                <div>
+                                                                    <button data-guild="{{guild.id}}" data-channel="{{announcement.channelID}}" data-announcement="{{announcement.id}}" type="button" value="Edit" onclick="editAnnouncement(this)">Edit</button>
+                                                                    <input type="submit" value="Delete">
+                                                                </div>
+                                                            </span>
+                                                        </fieldset>
+                                                    </form></li>
+                                                {% endfor %}
+                                            {% else %}
+                                                <li>None</li>
+                                            {% endif %}
+                                            <li><form id="{{guild.id}}-newAnnouncementForm" method="POST" action="/discord/announcement/add">
+                                                <details><summary>New Announcement</summary>
+                                                    <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                    <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                    <label for="streamName">Stream:</label>
+                                                    <input type="text" id="streamName" name="streamName" maxlength="100" required/>
+                                                    <br>
+                                                    <label for="channel">Announcement channel:</label>
+                                                    <select id="channel" name="channel" required>
+                                                        {% if discordGuilds %}
+                                                            {% for channel in discordGuilds[guild.id].text_channels %}
+                                                                <option value="{{channel.id}}">{{channel.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <br>
+                                                    <label for="announcementText">Announce Message: <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by putting <code>\:CUSTOM_EMOJI:</code> into a message on Discord!)</small>
+                                                    </label>
+                                                    <br>
+                                                    <textarea id="announcementText" name="announcementText" maxlength="1900"></textarea>
+                                                    <input type="submit" value="Add Announcement">
+                                                </details>
+                                            </form></li>
+                                        </ul>
+                                    </li>
+                                </ul>
                             </li>
+                            <hr>
                         {% endfor %}
                     </ul>
                 {% endif %}

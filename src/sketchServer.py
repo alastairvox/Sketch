@@ -1,6 +1,6 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_csrf, secrets, uuid, datetime
+import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_csrf, secrets, uuid, datetime, pytz
 from secrets import compare_digest
 from urllib.parse import urlencode
 from typing import Optional
@@ -331,6 +331,54 @@ async def hello(request: aiohttp.web.Request):
             guilds.add(guild)
 
     return {'messages': messages,'csrfToken': csrfToken, 'user': user, 'guilds': guilds, 'discordGuilds': discordGuilds}
+
+# /discord/config
+@routes.post('/discord/config')
+async def updateDiscordConfig(request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        authorized = await checkAuthorized(user, data['guild'])
+        
+        if not authorized:
+            session['messages'].append(f'''<b class="error">Failed updating guild config. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+        else:
+            dbGuild = await DiscordGuild.get(id=data['guild'])
+            
+            dbGuild.deleteOldAnnouncements = True if data['deleteOldAnnouncements'] == 'True' else False
+            
+            try:
+                if not data['spamProtectionAnnounceDelay']:
+                    num = 0
+                else:
+                    num = int(float(data['spamProtectionAnnounceDelay']))
+            except ValueError:
+                num = 0
+            dbGuild.spamProtectionAnnounceDelay = num
+            
+            try:
+                pytz.timezone(data['timeZone'])
+                timeZone = data['timeZone']
+            except pytz.exceptions.UnknownTimeZoneError:
+                timeZone = dbGuild.timeZone
+            dbGuild.timeZone = timeZone
+            
+            await dbGuild.save(update_fields=['timeZone', 'spamProtectionAnnounceDelay', 'deleteOldAnnouncements'])
+
+# /discord/authorizedUser/delete
+# /discord/authorizedUser/add
+# /discord/joinRole/delete
+# /discord/joinRole/add
 
 @routes.post('/discord/announcement/add')
 async def addDiscordAnnouncement(request):

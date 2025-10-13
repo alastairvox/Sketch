@@ -49,13 +49,19 @@ body {
     grid-area: content;
 }
 
+.container > div {
+    min-width: 50vw;
+}
+
 form {
     margin-top: 1em;
+    position: relative;
 }
 
 fieldset {
     display: flex;
     flex-direction: column;
+    padding-bottom: 30px;
 }
 
 label {
@@ -75,11 +81,49 @@ textarea {
   resize: both;
 }
 
-.manageAnnouncementForm input, .manageAnnouncementForm button {
-    float: right;
+form fieldset > input[type="submit"], form details > input[type="submit"], form span div{
+    position: absolute; 
+    bottom: 0;
+    right: 0;
+}
+
+form textarea {
+    width: 100%;
 }
 
 .buttonContainer {
     display: grid;
     grid-auto-flow: column;
+}
+
+legend {
+  background-color: black;
+  color: white;
+  padding: 3px 6px;
+}
+
+details {
+  border: 1px solid #aaaaaa;
+  border-radius: 4px;
+  padding: 0.5em 0.5em 0;
+}
+
+summary {
+  font-weight: bold;
+  margin: -0.5em -0.5em 0;
+  padding: 0.5em;
+}
+
+details[open] {
+  padding: 0.5em;
+  padding-bottom: 30px;
+}
+
+details[open] summary {
+  border-bottom: 1px solid #aaaaaa;
+  margin-bottom: 0.5em;
+}
+
+hr {
+    margin: 20px 0;
 }
