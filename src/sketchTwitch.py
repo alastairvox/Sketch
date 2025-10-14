@@ -116,7 +116,13 @@ async def notifyStreams(streams: list[twitchio.Stream]):
             response = await bot.fetch_users(ids=subList)
             fullUsers.extend(response)
         for user in fullUsers:
-            await TwitchAnnouncement.filter(streamID=user.id).update(profileImageURL=user.profile_image.base_url, offlineImageURL=user.offline_image.base_url)
+            profileImage = user.profile_image
+            if profileImage:
+                profileImage = user.profile_image.base_url
+            offlineImage = user.offline_image
+            if offlineImage:
+                offlineImage = user.offline_image.base_url
+            await TwitchAnnouncement.filter(streamID=user.id).update(profileImageURL=profileImage, offlineImageURL=offlineImage)
     
     for stream in streamsToAnnounce: 
         game = {'name': 'No Game or Unknown'}

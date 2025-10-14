@@ -162,7 +162,10 @@ async def removeAnnouncement(dbStream: TwitchAnnouncement):
             announcement.embeds[0].insert_field_at(index=2,name='Duration',value=duration,inline=True)
             announcement.embeds[0].set_field_at(index=3,name='Played',value=announcement.embeds[0].fields[3].value)
             announcement.embeds[0].set_footer(text='Ended    •  ' + endedFooter + '\nStarted')
-            announcement.embeds[0].set_image(url=offlineURL.replace('-1920x1080', ''))
+            if offlineURL:
+                announcement.embeds[0].set_image(url=offlineURL.replace('-1920x1080', ''))
+            else:
+                announcement.embeds[0].set_image(url=offlineURL)
 
             info(f'Editing announcement for {dbStream.streamName} to reflect offline state.')
             await announcement.edit(content=announcement.content,embed=announcement.embeds[0])
@@ -194,6 +197,7 @@ async def removeAnnouncement(dbStream: TwitchAnnouncement):
 async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     # no more streamRole, just send the announce message
     # no more botChannel (unless i want a special override). old message: \nIf you don't want these notifications, go to " + botChannel.mention + " and type ``" + prefix + "notify``.
+    await dbStream.refresh_from_db()
     await dbStream.fetch_related('guild')
     timeZone = dbStream.guild.timeZone
     # no more prefix, only app commands
@@ -225,6 +229,8 @@ async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     embed.set_footer(text='Started')
     embed.set_image(url=twitchioStream.thumbnail.base_url.replace('-{width}x{height}', ''))
     embed.set_author(name=twitchioStream.title, url='https://twitch.tv/' + twitchioStream.user.name, icon_url=profileURL)
+    debug(profileURL)
+    debug(embed.author)
     if game and game.box_art:
         embed.set_thumbnail(url=game.box_art.base_url.replace('-{width}x{height}', '').replace('/ttv-boxart/./', '/ttv-boxart/'))
     else:

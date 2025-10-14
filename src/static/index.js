@@ -1,20 +1,31 @@
+window.onload = function() {
+  for (var form of document.forms) {
+    if (!form.id.includes('newAnnouncementForm')){
+      console.log("clearing" + form.id)
+      form.reset()
+    }
+  }
+}
+
 function cancelEdit(button) {
   const guildID = button.dataset.guild;
   const addForm = document.getElementById(guildID+'-newAnnouncementForm');
-  var buttonContainer = addForm.querySelector('fieldset .buttonContainer');
+  var buttonContainer = addForm.querySelector('.buttonContainer');
   var submitButton = addForm.querySelector('input[type="submit"]')
   var hiddenAnnouncementID = addForm.querySelector('input[name="announcementID"]')
 
   addForm.action = "/discord/announcement/add"
-  addForm.querySelector('legend b').innerHTML = "Add Announcement";
+  addForm.querySelector('summary').innerHTML = "Add Announcement";
   addForm.querySelector('#streamName').value = '';
   addForm.querySelector('#channel').options.selectedIndex = 0;
   addForm.querySelector('#announcementText').value = '';
   submitButton.value = "Add Announcement";
-  addForm.querySelector('fieldset').appendChild(submitButton)
+  addForm.querySelector('details').appendChild(submitButton)
 
   hiddenAnnouncementID.remove()
   buttonContainer.remove()
+
+  addForm.querySelector('details').removeAttribute('open');
 }
 
 function editAnnouncement(button) {
@@ -32,8 +43,8 @@ function editAnnouncement(button) {
     if (formTest.value === announcementID) {
       return;
     } else {
-      var hiddenAnnouncementID = addForm.querySelector('fieldset input[name="announcementID"]')
-      var buttonContainer = addForm.querySelector('fieldset .buttonContainer');
+      var hiddenAnnouncementID = addForm.querySelector('input[name="announcementID"]')
+      var buttonContainer = addForm.querySelector('.buttonContainer');
       var cancelButton = buttonContainer.querySelector('button[type="button"]')
     }
   } else {
@@ -47,7 +58,7 @@ function editAnnouncement(button) {
   announcementText = announcementText.split(': ')[1]
 
   addForm.action = "/discord/announcement/edit"
-  addForm.querySelector('legend b').innerHTML = "Edit Announcement";
+  addForm.querySelector('summary').innerHTML = "Edit Announcement";
   addForm.querySelector('#streamName').value = streamName;
   addForm.querySelector('#channel').value = channelID;
   addForm.querySelector('#announcementText').value = announcementText;
@@ -56,10 +67,10 @@ function editAnnouncement(button) {
   hiddenAnnouncementID.type = "hidden";
   hiddenAnnouncementID.name = "announcementID";
   hiddenAnnouncementID.value = announcementID;
-  addForm.querySelector('fieldset').appendChild(hiddenAnnouncementID)
+  addForm.querySelector('details').appendChild(hiddenAnnouncementID)
   
   buttonContainer.className = "buttonContainer";
-  addForm.querySelector('fieldset').appendChild(buttonContainer)
+  addForm.querySelector('details').appendChild(buttonContainer)
   buttonContainer.appendChild(addForm.querySelector('input[type="submit"]'));
   
   cancelButton.type = "button"
@@ -68,5 +79,7 @@ function editAnnouncement(button) {
   cancelButton.dataset.guild = guildID
   cancelButton.onclick = function() {cancelEdit(cancelButton);}
   buttonContainer.appendChild(cancelButton)
+
+  addForm.querySelector('details').setAttribute('open', '');
 }
 

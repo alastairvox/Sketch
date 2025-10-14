@@ -249,7 +249,7 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
     return None
 
 async def checkAuthorized(user: DiscordUser, guildID) -> bool:
-    debug(f"Checking authorization for discord user: {user} and guild: {guildID}")
+    debug(f"Checking authorization for discord user: {user.name} and guild: {guildID}")
     
     dbGuild = await DiscordGuild.get(id=guildID)
     authorized = False
@@ -363,7 +363,8 @@ async def updateDiscordConfig(request):
                 else:
                     num = int(float(data['spamProtectionAnnounceDelay']))
             except ValueError:
-                num = 0
+                num = dbGuild.spamProtectionAnnounceDelay
+                session['messages'].append(f'''<b class="error">Invalid Re-Announce Delay. (Must be a number.)</b><br>Re-Announce Delay not changed. Please try again, or contact alastairvox on discord.''')
             dbGuild.spamProtectionAnnounceDelay = num
             
             try:
@@ -371,9 +372,13 @@ async def updateDiscordConfig(request):
                 timeZone = data['timeZone']
             except pytz.exceptions.UnknownTimeZoneError:
                 timeZone = dbGuild.timeZone
+                session['messages'].append(f'''<b class="error">Invalid Time Zone. (Must be from <a href="https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568">list.</a>)</b><br>Time Zone not changed. Please try again, or contact alastairvox on discord.''')
             dbGuild.timeZone = timeZone
             
             await dbGuild.save(update_fields=['timeZone', 'spamProtectionAnnounceDelay', 'deleteOldAnnouncements'])
+            session['messages'].append(f'<b class="success">Guild config updated.</b><br>Guild: {dbGuild.name}')
+            
+    return aiohttp.web.HTTPSeeOther('/discord')
 
 # /discord/authorizedUser/delete
 # /discord/authorizedUser/add
