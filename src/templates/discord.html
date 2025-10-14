@@ -19,7 +19,6 @@
                 {% if guilds %}
                     <ul class="guildList">
                         {% for guild in guilds %}
-                            {# TODO list config options for joinroles, re-announce delay, deleting or editing past announcements, timezone, and authorized users #}
                             <li class="guildListItem"><form id="{{guild.id}}-manageGuildForm" class="manageGuildForm" method="POST" action="/discord/config">
                                     <fieldset>
                                         <legend><b>{{ guild.name }} Configuration</b></legend>
@@ -40,7 +39,7 @@
                                 <ul>
                                     <li><h3>Join Roles:</h3>
                                         <ul>
-                                            {% if guild.joinroles %}
+                                            {% if guild.joinRoles %}
                                                 {% for role in guild.joinRoles %}
                                                     <li><form id="{{guild.id}}-{{role.id}}-manageJoinRoleForm" class="manageJoinRoleForm" method="POST" action="/discord/joinRole/delete">
                                                         <fieldset>
@@ -48,6 +47,7 @@
                                                             <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
                                                             <input type="hidden" name="guild" value="{{guild.id}}"/>
                                                             <input type="hidden" name="roleID" value="{{role.id}}"/>
+                                                            <span>ID: {{ role.id }}</span>
                                                             <input type="submit" value="Delete">
                                                         </fieldset>
                                                     </form></li>
@@ -64,7 +64,10 @@
                                                     <select class="roles" id="{{guild.id}}-roles" name="roles" size="15" multiple required>
                                                         {% if discordGuilds %}
                                                             {% for role in discordGuilds[guild.id].roles %}
-                                                                <option value="{{role.id}}">{{role.name}}</option>
+                                                                {% if role.name == "@everyone" %}
+                                                                {% else %}
+                                                                    <option value="{{role.id}}">{{role.name}} ({{role.id}})</option>
+                                                                {% endif %}
                                                             {% endfor %}
                                                         {% endif %}
                                                     </select>
@@ -168,6 +171,8 @@
                             </li>
                         {% endfor %}
                     </ul>
+                {% else %}
+                    <p>You must first <a href="https://discord.com/api/oauth2/authorize?client_id=1122029171942637638&permissions=8&scope=bot%20applications.commands">add Sketch to a server</a>, or be added to a server's authorized user list by a server owner or other authorized user to manage a guild's settings.</p>
                 {% endif %}
         </div>
     </div>

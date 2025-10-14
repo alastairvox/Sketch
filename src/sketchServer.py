@@ -70,6 +70,11 @@ async def summon():
     clientSession = aiohttp.ClientSession()
     
     app.add_routes(routes)
+    subappDiscord.add_routes(subroutesDiscord)
+    subappVoice.add_routes(subroutesVoice)
+    app.add_domain('discord.drawn.actor', subappDiscord)
+    app.add_domain('discord.alastairvox.com', subappDiscord)
+    app.add_domain('voice.alastairvox.com', subappVoice)
 
     app.router.add_static('/static/', path='src/static', name='static')
 
@@ -91,7 +96,11 @@ async def on_shutdown(app):
     info('Disconnected from HTTP server on port ' + sketchAuth.internalPort + '.')
 
 routes = aiohttp.web.RouteTableDef()
+subroutesDiscord = aiohttp.web.RouteTableDef()
+subroutesVoice = aiohttp.web.RouteTableDef()
 app = aiohttp.web.Application()
+subappDiscord = aiohttp.web.Application()
+subappVoice = aiohttp.web.Application()
 
 csrf_policy = SketchFormAndHeaderPolicy(field_name='_csrf_token', header_name='Csrf-Token')
 csrf_storage = aiohttp_csrf.storage.SessionStorage('csrf_token', secret_phrase=sketchAuth.serverSecret)
@@ -252,6 +261,10 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
     return None
 
 async def checkAuthorized(user: DiscordUser, guildID) -> bool:
+    if not guildID:
+        error(f"Checking authorization for discord user: {user.name} but guild was None")
+        return False
+    
     debug(f"Checking authorization for discord user: {user.name} and guild: {guildID}")
     
     dbGuild = await DiscordGuild.get(id=guildID)
@@ -268,6 +281,18 @@ async def checkAuthorized(user: DiscordUser, guildID) -> bool:
     return authorized
 
 # MARK: EVENTS ------------------------------------------------------------------------------------------------------------
+
+@subroutesDiscord.get('/')
+async def discordLinkRedirect(request):
+    debug('Redirecting to discord invite!')
+    raise aiohttp.web.HTTPTemporaryRedirect("https://discord.com/invite/M4FdEDf")
+    return aiohttp.web.Response(status=404)
+
+@subroutesVoice.get('/')
+async def voiceLinkRedirect(request):
+    debug('Redirecting to voice!')
+    raise aiohttp.web.HTTPTemporaryRedirect("https://www.youtube.com/watch?v=Y1xKsmzydqE")
+    return aiohttp.web.Response(status=404)
 
 # comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message? :(
 @routes.get('/')
@@ -337,7 +362,7 @@ async def discord(request: aiohttp.web.Request):
 
 # /discord/config
 @routes.post('/discord/config')
-async def updateDiscordConfig(request):
+async def updateDiscordConfig(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -351,12 +376,12 @@ async def updateDiscordConfig(request):
         data = await request.post()
         debug(data)
         
-        authorized = await checkAuthorized(user, data['guild'])
+        authorized = await checkAuthorized(user, data.get('guild'))
         
         if not authorized:
             session['messages'].append(f'''<b class="error">Failed updating guild config. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
         else:
-            dbGuild = await DiscordGuild.get(id=data['guild'])
+            dbGuild = await DiscordGuild.get(id=data.get('guild'))
             
             dbGuild.deleteOldAnnouncements = True if data.get('deleteOldAnnouncements') == 'True' else False
             
@@ -364,7 +389,7 @@ async def updateDiscordConfig(request):
                 if not data.get('spamProtectionAnnounceDelay'):
                     num = 0
                 else:
-                    num = int(float(data['spamProtectionAnnounceDelay']))
+                    num = int(float(data.get('spamProtectionAnnounceDelay')))
             except ValueError:
                 num = dbGuild.spamProtectionAnnounceDelay
                 session['messages'].append(f'''<b class="error">Invalid Re-Announce Delay. (Must be a number.)</b><br>Re-Announce Delay not changed. Please try again, or contact alastairvox on discord.''')
@@ -372,7 +397,7 @@ async def updateDiscordConfig(request):
             
             try:
                 pytz.timezone(data.get('timeZone'))
-                timeZone = data['timeZone']
+                timeZone = data.get('timeZone')
             except pytz.exceptions.UnknownTimeZoneError:
                 timeZone = dbGuild.timeZone
                 session['messages'].append(f'''<b class="error">Invalid Time Zone. (Must be from <a href="https://gist.github.com/heyalexej/8bf688fd67d7199be4a1682b3eec7568">list.</a>)</b><br>Time Zone not changed. Please try again, or contact alastairvox on discord.''')
@@ -385,7 +410,7 @@ async def updateDiscordConfig(request):
 
 # /discord/authorizedUser/add
 @routes.post('/discord/authorizedUser/add')
-async def addDiscordAuthorizedUser(request):
+async def addDiscordAuthorizedUser(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -399,7 +424,7 @@ async def addDiscordAuthorizedUser(request):
         data = await request.post()
         debug(data)
         
-        authorized = await checkAuthorized(user, data['guild'])
+        authorized = await checkAuthorized(user, data.get('guild'))
         
         if not authorized:
             session['messages'].append(f'''<b class="error">Failed adding authorized user. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
@@ -414,19 +439,15 @@ async def addDiscordAuthorizedUser(request):
                 dbUsers.append(dbUser)
             
             if dbUsers:
-                dbGuild = await DiscordGuild.get(id=data['guild'])
+                dbGuild = await DiscordGuild.get(id=data.get('guild'))
                 await dbGuild.authorizedUsers.add(*dbUsers)
-            session['messages'].append(f'<b class="success">Users authorized.</b><br>Users: {[addedUser.name for addedUser in dbUsers]}')
+            session['messages'].append(f'<b class="success">Users authorized.</b><br>Users: {[addedUser.username for addedUser in dbUsers]}')
     
     return aiohttp.web.HTTPSeeOther('/discord')
             
 # /discord/authorizedUser/delete
-
-# /discord/joinRole/delete
-# /discord/joinRole/add
-
-@routes.post('/discord/announcement/add')
-async def addDiscordAnnouncement(request):
+@routes.post('/discord/authorizedUser/delete')
+async def deleteDiscordAuthorizedUser(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -440,28 +461,129 @@ async def addDiscordAnnouncement(request):
         data = await request.post()
         debug(data)
         
-        authorized = await checkAuthorized(user, data['guild'])
+        authorized = await checkAuthorized(user, data.get('guild'))
+        
+        if not authorized:
+            session['messages'].append(f'''<b class="error">Failed removing authorized user. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+        else:
+            # passes guild and userID
+            dbGuild = await DiscordGuild.get_or_none(id=data.get('guild'))
+            dbUser = await DiscordUser.get_or_none(id=data.get('userID'))
+            if not dbGuild or not dbUser:
+                session['messages'].append(f'''<b class="error">Failed removing authorized user. (User or guild couldn't be fetched from database.)</b><br>Please try again, or contact alastairvox on discord.''')
+            else:
+                await dbGuild.authorizedUsers.remove(dbUser)
+                session['messages'].append(f'<b class="success">Authorized user removed.</b><br>User: {dbUser.username}')
+        
+    return aiohttp.web.HTTPSeeOther('/discord')
+
+# /discord/joinRole/add
+@routes.post('/discord/joinRole/add')
+async def addDiscordJoinRole(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        authorized = await checkAuthorized(user, data.get('guild'))
+        
+        if not authorized:
+            session['messages'].append(f'''<b class="error">Failed adding Join Role. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+        else:
+            dbGuild = await DiscordGuild.get(id=data.get('guild'))
+            discordGuild = sketchDiscord.bot.get_guild(dbGuild.id)
+            
+            dbRoles = []
+            for joinRole in data.getall('roles'):
+                discordRole = discordGuild.get_role(int(joinRole))
+                if not discordRole:
+                    session['messages'].append(f'''<b class="error">Failed adding join role. (Role ID not found on server.)</b><br>Role: {joinRole} Please try again, or contact alastairvox on discord.''')
+                else:
+                    dbRole, _ = await DiscordJoinRole.get_or_create(id=joinRole, guild=dbGuild)
+                    dbRole.name = discordRole.name
+                    dbRole.guild = dbGuild
+                    await dbRole.save()
+                    dbRoles.append(dbRole)
+            
+            session['messages'].append(f'<b class="success">Join Roles added.</b><br>Roles: {[addedRole.name + ' (' + str(addedRole.id) + ')' for addedRole in dbRoles]}')
+    return aiohttp.web.HTTPSeeOther('/discord')
+
+# /discord/joinRole/delete
+@routes.post('/discord/joinRole/delete')
+async def deleteDiscordJoinRole(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        role = await DiscordJoinRole.get_or_none(id=data.get('roleID'))
+        if not role:
+            session['messages'].append(f'<b class="error">Failed deleting Join Role. (Invalid role ID.)</b><br>Please try again, or contact alastairvox on discord.')
+        else:
+            await role.fetch_related('guild')
+            authorized = await checkAuthorized(user, role.guild.id)
+    
+            if not authorized:
+                session['messages'].append(f'''<b class="error">Failed deleting Join Role. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+            else:
+                await role.delete()
+                session['messages'].append(f'<b class="success">Join Role deleted.</b><br>Role: {role.name} ({role.id})')
+    
+    return aiohttp.web.HTTPSeeOther('/discord')
+
+@routes.post('/discord/announcement/add')
+async def addDiscordAnnouncement(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        authorized = await checkAuthorized(user, data.get('guild'))
         
         if not authorized:
             session['messages'].append(f'''<b class="error">Failed creating Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
         else:
-            streamUser = await sketchTwitch.bot.fetch_user(login=data['streamName'])
+            streamUser = await sketchTwitch.bot.fetch_user(login=data.get('streamName'))
             if not streamUser:
                 # no channel by that name, error
                 session['messages'].append(f'<b class="error">Failed creating Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')
             else:
-                dbGuild = await DiscordGuild.get(id=data['guild'])
-                await TwitchAnnouncement.create(streamName=data['streamName'],
+                dbGuild = await DiscordGuild.get(id=data.get('guild'))
+                await TwitchAnnouncement.create(streamName=data.get('streamName'),
                                                 streamID=streamUser.id,
-                                                announcementText=data['announcementText'],
+                                                announcementText=data.get('announcementText'),
                                                 guild=dbGuild,
-                                                channelID=data['channel'])
-                session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data['streamName']}')
+                                                channelID=data.get('channel'))
+                session['messages'].append(f'<b class="success">Twitch announcement created.</b><br>Stream: {data.get('streamName')}')
         
     return aiohttp.web.HTTPSeeOther('/discord')
 
 @routes.post('/discord/announcement/delete')
-async def addDiscordAnnouncement(request):
+async def deleteDiscordAnnouncement(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -475,7 +597,7 @@ async def addDiscordAnnouncement(request):
         data = await request.post()
         debug(data)
         
-        announcement = await TwitchAnnouncement.get_or_none(id=data['announcementID'])
+        announcement = await TwitchAnnouncement.get_or_none(id=data.get('announcementID'))
         if not announcement:
             session['messages'].append(f'<b class="error">Failed deleting Twitch announcement. (Invalid announcement ID.)</b><br>Please try again, or contact alastairvox on discord.')
         else:
@@ -483,15 +605,15 @@ async def addDiscordAnnouncement(request):
             authorized = await checkAuthorized(user, announcement.guild.id)
     
             if not authorized:
-                session['messages'].append(f'''<b class="error">Failed editing Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+                session['messages'].append(f'''<b class="error">Failed deleting Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
             else:
                 await announcement.delete()
-                session['messages'].append(f'<b class="success">Twitch announcement deleted.</b><br>Stream: {data['streamName']}')
+                session['messages'].append(f'<b class="success">Twitch announcement deleted.</b><br>Stream: {data.get('streamName')}')
             
     return aiohttp.web.HTTPSeeOther('/discord')
     
 @routes.post('/discord/announcement/edit')
-async def addDiscordAnnouncement(request):
+async def updateDiscordAnnouncement(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -505,11 +627,11 @@ async def addDiscordAnnouncement(request):
         data = await request.post()
         debug(data)
         
-        announcement = await TwitchAnnouncement.get_or_none(id=data['announcementID'])
+        announcement = await TwitchAnnouncement.get_or_none(id=data.get('announcementID'))
         if not announcement:
             session['messages'].append(f'<b class="error">Failed editing Twitch announcement. (Invalid announcement ID.)</b><br>Please try again, or contact alastairvox on discord.')
         else:
-            streamUser = await sketchTwitch.bot.fetch_user(login=data['streamName'])
+            streamUser = await sketchTwitch.bot.fetch_user(login=data.get('streamName'))
             if not streamUser:
                 # no channel by that name, error
                 session['messages'].append(f'<b class="error">Failed editing Twitch announcement. (No channel by that name on Twitch.)</b><br>Please try again, or contact alastairvox on discord.')
@@ -520,14 +642,15 @@ async def addDiscordAnnouncement(request):
                 if not authorized:
                     session['messages'].append(f'''<b class="error">Failed editing Twitch announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
                 else:
-                    announcement.streamName=data['streamName']
+                    announcement.streamName=data.get('streamName')
                     announcement.streamID=streamUser.id
-                    announcement.announcementText=data['announcementText']
-                    announcement.channelID=data['channel']
+                    announcement.announcementText=data.get('announcementText')
+                    announcement.channelID=data.get('channel')
                     await announcement.save()
-                    session['messages'].append(f'<b class="success">Twitch announcement edited.</b><br>Stream: {data['streamName']}')
+                    session['messages'].append(f'<b class="success">Twitch announcement edited.</b><br>Stream: {data.get('streamName')}')
 
     return aiohttp.web.HTTPSeeOther('/discord')
+
 # start discord authentication for user
 # store the refresh token, access token, expiry time, state, and sessionid in database
 # store the expiry time, user id, and state (random code) in the encrypted session cookie (sessionid already there)
@@ -591,13 +714,12 @@ async def discordCallback(request: aiohttp.web.Request):
             session.changed()
     
     # 303 response
-    raise aiohttp.web.HTTPSeeOther('/')
-
+    raise aiohttp.web.HTTPSeeOther('/login')
 
 # redirects user to google's oauth endpoint to begin oauth flow
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#httprest_1
 @routes.get('/youtube/auth/{userID}')
-async def youtubeAuth(request):
+async def youtubeAuth(request: aiohttp.web.Request):
     userID = request.match_info.get('userID', '')
 
     debug('Responding to YouTube OAuth request for user: ' + str(userID))
@@ -632,7 +754,7 @@ async def youtubeAuth(request):
 # receives return info from google's oauth endpoint
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#handlingresponse
 @routes.get('/youtube/callback')
-async def youtubeCallback(request):
+async def youtubeCallback(request: aiohttp.web.Request):
     debug('Responding to YouTube callback request.')
 
     if 'code' not in request.query or 'state' not in request.query:
@@ -666,7 +788,7 @@ async def youtubeCallback(request):
     return aiohttp.web.Response(text=result, content_type="text/html")
 
 @routes.post('/test')
-async def test(request):
+async def test(request: aiohttp.web.Request):
     debug('Testing...')
 
     # await sketchDatabase.SketchDbObj.create('youtubeVideos', {'videoId': '7t5a32SRf-s', 'channelId': 'UCmkonxPPduKnLNWvqhoHl_g', 'title': 'short clips', 'privacyStatus': 'private', 'thumbnailUrl': 'https://i9.ytimg.com/vi/7t5a32SRf-s/hqdefault.jpg?sqp=CPjupqQG&rs=AOn4CLAeWYaTGi_N33HYRUDWNxpMEOu3gw'})
