@@ -1,0 +1,24 @@
+{# templates/index.html #}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Sketch: Logs</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+    {% include "header.html" %}
+
+    <div class="container">
+        <div>
+            <h1>Logs</h1>
+            <pre>{{text}}</pre>
+            <a href="/admin/logs">refresh</a>
+        </div>
+    </div>
+</body>
+
+</html>

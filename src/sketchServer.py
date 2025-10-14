@@ -311,6 +311,28 @@ async def hello(request: aiohttp.web.Request):
 
     return {'messages': messages,'csrfToken': csrfToken, 'user': user}
 
+@routes.get('/admin/logs')
+@aiohttp_jinja2.template('logs.html')
+async def logs(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    messages = await getMessages(session)    
+    csrfToken = await aiohttp_csrf.generate_token(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        if user.id == sketchAuth.discordOwner:
+            with open('./logs/sketch.log', 'r') as f:
+                text = f.read().replace('\\n', '\n')
+            return {'messages': messages,'csrfToken': csrfToken, 'user': user, 'text': text}
+    
+    return aiohttp.web.HTTPSeeOther('/')
+
 @routes.get('/login')
 @aiohttp_jinja2.template('login.html')
 async def login(request: aiohttp.web.Request):
