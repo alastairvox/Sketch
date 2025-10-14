@@ -66,6 +66,11 @@ class SketchFormAndHeaderPolicy(SketchHeaderPolicy, SketchFormPolicy):
 
 async def summon():
     info('Summoning...')
+    if sketchShared.dev:
+        aiohttp_jinja2.setup(app, enable_async=True, loader=jinja2.FileSystemLoader('src/templates'))
+    else:
+        aiohttp_jinja2.setup(app, enable_async=True, loader=jinja2.FileSystemLoader('templates'))
+    
     global clientSession
     clientSession = aiohttp.ClientSession()
     
@@ -75,8 +80,10 @@ async def summon():
     app.add_domain('discord.drawn.actor', subappDiscord)
     app.add_domain('discord.alastairvox.com', subappDiscord)
     app.add_domain('voice.alastairvox.com', subappVoice)
-
-    app.router.add_static('/static/', path='src/static', name='static')
+    if sketchShared.dev:
+        app.router.add_static('/static/', path='src/static', name='static')
+    else:
+        app.router.add_static('/static/', path='static', name='static')
 
     loop = asyncio.get_event_loop()
     await sketchTwitch.bot.wait_until_ready()
@@ -108,7 +115,6 @@ aiohttp_csrf.setup(app, policy=csrf_policy, storage=csrf_storage)
 aiohttp_session.setup(app, aiohttp_session.cookie_storage.EncryptedCookieStorage(sketchAuth.serverURLSafeSecret, max_age=604800, httponly=True, secure=True, samesite='Lax'))
 app.middlewares.append(aiohttp_csrf.csrf_middleware)
 
-aiohttp_jinja2.setup(app, enable_async=True, loader=jinja2.FileSystemLoader('src/templates'))
 app.on_startup.append(on_startup)
 app.on_shutdown.append(on_shutdown)
 global clientSession
