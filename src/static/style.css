@@ -127,3 +127,15 @@ details[open] summary {
 hr {
     margin: 20px 0;
 }
+
+.guildListItem {
+    border: 8px solid black;
+    border-radius: 16px;
+    padding: 8px;
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+}
+
+.guildList {
+    list-style-type: none;
+}

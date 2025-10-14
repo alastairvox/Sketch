@@ -37,6 +37,7 @@ class DiscordGuild(models.Model):
 class DiscordUser(models.Model):
     id = UnsignedBigIntField(primary_key=True, generated=False)
     name = fields.TextField(null=True)
+    username = fields.TextField(null=True)
     accessToken = fields.TextField(null=True)
     refreshToken = fields.TextField(null=True)
     expiryTime = fields.DatetimeField(null=True)

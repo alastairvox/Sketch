@@ -16,9 +16,9 @@ function cancelEdit(button) {
 
   addForm.action = "/discord/announcement/add"
   addForm.querySelector('summary').innerHTML = "Add Announcement";
-  addForm.querySelector('#streamName').value = '';
-  addForm.querySelector('#channel').options.selectedIndex = 0;
-  addForm.querySelector('#announcementText').value = '';
+  addForm.querySelector('.streamName').value = '';
+  addForm.querySelector('.channel').options.selectedIndex = 0;
+  addForm.querySelector('.announcementText').value = '';
   submitButton.value = "Add Announcement";
   addForm.querySelector('details').appendChild(submitButton)
 
@@ -59,9 +59,9 @@ function editAnnouncement(button) {
 
   addForm.action = "/discord/announcement/edit"
   addForm.querySelector('summary').innerHTML = "Edit Announcement";
-  addForm.querySelector('#streamName').value = streamName;
-  addForm.querySelector('#channel').value = channelID;
-  addForm.querySelector('#announcementText').value = announcementText;
+  addForm.querySelector('.streamName').value = streamName;
+  addForm.querySelector('.channel').value = channelID;
+  addForm.querySelector('.announcementText').value = announcementText;
   addForm.querySelector('input[type="submit"]').value = "Edit Announcement";
 
   hiddenAnnouncementID.type = "hidden";

@@ -15,21 +15,9 @@
 
     <div class="container">
         <div>
-            <h1>{{ testName }} Test</h1>
-            <ul>
-                {% for gamer in gamers %}
-                <li> {{ gamer }} </li>
-                {% endfor %}
-            </ul>
-            <form id="testForm" method="POST" action="/test">
-                <input type="hidden" name="_csrf_token" value="{{csrfToken}}" />
-                <input type="submit" value="Test me!">
-            </form>
-            <form id="rawForm" method="POST" action="/">
-                <input type="hidden" name="_csrf_token" value="{{csrfToken}}" />
-                <input type="text" name="name" />
-                <input type="submit" value="Submit an evil form.">
-            </form>
+            <h1>Welcome to Sketch c:</h1>
+            <p>Please log in to manage your server! Sorry that the website looks bad I am so tired :)</p>
+            <p>There should be links to my stuff here also... but im so tired...</p>
         </div>
     </div>
 

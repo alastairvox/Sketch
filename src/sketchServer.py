@@ -74,6 +74,8 @@ async def summon():
     app.router.add_static('/static/', path='src/static', name='static')
 
     loop = asyncio.get_event_loop()
+    await sketchTwitch.bot.wait_until_ready()
+    await sketchDiscord.bot.wait_until_ready()
     #  uses internal _run_app since we are managing our own loops
     loop.create_task(aiohttp.web._run_app(app, port=sketchAuth.internalPort, print=None))
 
@@ -180,6 +182,7 @@ async def getDiscordCodeTokens(code, state, session: aiohttp_session.Session) ->
             # store tokens, state, etc.
             dbUser, _ = await DiscordUser.get_or_create(id=user['id'])
             dbUser.name = user['global_name']
+            dbUser.username = user['username']
             dbUser.accessToken = data.get('access_token')
             dbUser.refreshToken = data.get('refresh_token')
             dbUser.expiryTime = expiryDateTime
@@ -266,7 +269,7 @@ async def checkAuthorized(user: DiscordUser, guildID) -> bool:
 
 # MARK: EVENTS ------------------------------------------------------------------------------------------------------------
 
-# comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message :(
+# comment this out to hopefully not have to deal with the possibility that aiohttp parses an attack message? :(
 @routes.get('/')
 @aiohttp_jinja2.template('index.html')
 async def hello(request: aiohttp.web.Request):
@@ -281,11 +284,11 @@ async def hello(request: aiohttp.web.Request):
     csrfToken = await aiohttp_csrf.generate_token(request)
     user = await validateDiscordAuth(session, request)
 
-    return {'messages': messages,'csrfToken': csrfToken, 'user': user, 'testName': "hiiiiii", 'gamers': ["umm", "gamer TWO"]}
+    return {'messages': messages,'csrfToken': csrfToken, 'user': user}
 
 @routes.get('/login')
 @aiohttp_jinja2.template('login.html')
-async def hello(request: aiohttp.web.Request):
+async def login(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -301,7 +304,7 @@ async def hello(request: aiohttp.web.Request):
 
 @routes.get('/discord')
 @aiohttp_jinja2.template('discord.html')
-async def hello(request: aiohttp.web.Request):
+async def discord(request: aiohttp.web.Request):
     debug('Responding to ' + str(request) +
     ' from ' + str(request.remote) +
     ' headers ' + str(request.headers) +
@@ -355,10 +358,10 @@ async def updateDiscordConfig(request):
         else:
             dbGuild = await DiscordGuild.get(id=data['guild'])
             
-            dbGuild.deleteOldAnnouncements = True if data['deleteOldAnnouncements'] == 'True' else False
+            dbGuild.deleteOldAnnouncements = True if data.get('deleteOldAnnouncements') == 'True' else False
             
             try:
-                if not data['spamProtectionAnnounceDelay']:
+                if not data.get('spamProtectionAnnounceDelay'):
                     num = 0
                 else:
                     num = int(float(data['spamProtectionAnnounceDelay']))
@@ -368,7 +371,7 @@ async def updateDiscordConfig(request):
             dbGuild.spamProtectionAnnounceDelay = num
             
             try:
-                pytz.timezone(data['timeZone'])
+                pytz.timezone(data.get('timeZone'))
                 timeZone = data['timeZone']
             except pytz.exceptions.UnknownTimeZoneError:
                 timeZone = dbGuild.timeZone
@@ -380,8 +383,45 @@ async def updateDiscordConfig(request):
             
     return aiohttp.web.HTTPSeeOther('/discord')
 
-# /discord/authorizedUser/delete
 # /discord/authorizedUser/add
+@routes.post('/discord/authorizedUser/add')
+async def addDiscordAuthorizedUser(request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        authorized = await checkAuthorized(user, data['guild'])
+        
+        if not authorized:
+            session['messages'].append(f'''<b class="error">Failed adding authorized user. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+        else:
+            dbUsers = []
+            for authUser in data.getall('users'):
+                dbUser, _ = await DiscordUser.get_or_create(id=authUser)
+                discordUser = await sketchDiscord.bot.fetch_user(dbUser.id)
+                dbUser.name = discordUser.global_name
+                dbUser.username = discordUser.name
+                await dbUser.save()
+                dbUsers.append(dbUser)
+            
+            if dbUsers:
+                dbGuild = await DiscordGuild.get(id=data['guild'])
+                await dbGuild.authorizedUsers.add(*dbUsers)
+            session['messages'].append(f'<b class="success">Users authorized.</b><br>Users: {[addedUser.name for addedUser in dbUsers]}')
+    
+    return aiohttp.web.HTTPSeeOther('/discord')
+            
+# /discord/authorizedUser/delete
+
 # /discord/joinRole/delete
 # /discord/joinRole/add
 

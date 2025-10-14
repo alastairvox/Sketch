@@ -63,7 +63,7 @@ async def configNewGuilds():
         # add guild to database, update name and owner id
         await DiscordGuild.update_or_create(id=guild.id, defaults={'name': guild.name, 'owner': guild.owner_id})
         # add owner to database, update name
-        await DiscordUser.update_or_create(id=guild.owner_id, defaults={'name': guild.owner.global_name})
+        await DiscordUser.update_or_create(id=guild.owner_id, defaults={'name': guild.owner.global_name, 'username': guild.owner.name})
         # we dont add the guild the user owns to the list of authorized guilds, because it could change at any time and we don't have a way to separate manually authorized users from unauthorized ones
 
 # tells discord what commands my bot knows
@@ -927,6 +927,9 @@ async def on_guild_join(guild: discord.Guild):
             if integration.application.user.id == bot.user.id:
                 inviter = integration.user # returns a discord.User object
                 dbUser, _ = await DiscordUser.get_or_create(id=inviter.id)
+                dbUser.name = inviter.global_name
+                dbUser.username = inviter.name
+                await dbUser.save()
                 await dbUser.authorizedGuilds.add(await DiscordGuild.get(id=guild.id))
                 break
 
@@ -935,7 +938,7 @@ async def on_guild_update(before: discord.Guild, after: discord.Guild):
     if before.owner_id != after.owner_id:
         info(f"Guild updated owner: {after.name}.")
         await DiscordGuild.update_or_create(id=after.id, defaults={'name': after.name, 'owner': after.owner_id})
-        await DiscordUser.update_or_create(id=after.owner_id, defaults={'name': after.owner.global_name})
+        await DiscordUser.update_or_create(id=after.owner_id, defaults={'name': after.owner.global_name, 'username': after.owner.name})
 
 @bot.event
 async def on_guild_remove(guild: discord.Guild):
