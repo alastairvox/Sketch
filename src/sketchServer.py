@@ -80,6 +80,7 @@ async def summon():
     app.add_domain('discord.drawn.actor', subappDiscord)
     app.add_domain('discord.alastairvox.com', subappDiscord)
     app.add_domain('voice.alastairvox.com', subappVoice)
+    
     if sketchShared.dev:
         app.router.add_static('/static/', path='src/static', name='static')
     else:
