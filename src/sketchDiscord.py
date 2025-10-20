@@ -959,7 +959,7 @@ async def on_member_join(member: discord.Member):
             role = member.guild.get_role(role.id)
             if role:
                 debug(f'New member {str(member)} ({str(member.id)}) joined server "{str(member.guild)}", giving them role {str(role.name)} ({str(role.id)}).')
-                member.add_roles(role)
+                await member.add_roles(role)
 
 # error handling for app command errors
 @bot.tree.error
