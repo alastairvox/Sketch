@@ -61,6 +61,7 @@ def main():
     loop.create_task(sketchDiscord.summon())
     loop.create_task(sketchTwitch.summon())
     loop.create_task(sketchServer.summon())
+    loop.create_task(sketchYoutube.youtubePrepareAllResubs())
     # makes the event loop run forever (this is blocking), so any current and future scheduled tasks will run until we explicitly tell the loop to die with loop.stop()
     loop.run_forever()
 

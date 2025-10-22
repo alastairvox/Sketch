@@ -10,3 +10,4 @@ tortoise-orm[asyncmy]>=0.25.1
 asyncmy>=0.2.8
 twitchio>=3.1.0
 python-dateutil>=2.9.0.post0
+lxml>=6.0.2

@@ -1,7 +1,7 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
 from typing import Any, Optional, Literal, List, Union
-import discord, asyncio, traceback, dateutil.parser, pytz, datetime, re
+import discord, asyncio, traceback, dateutil.parser, pytz, datetime, re, lxml.etree
 from discord import app_commands
 from discord.ext import commands
 import sketchAuth
@@ -193,7 +193,6 @@ async def removeAnnouncement(dbStream: TwitchAnnouncement):
         dbStream.ended = None
         await dbStream.save(update_fields=['ended'])
 
-# TODO makeAnnouncement
 async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     # no more streamRole, just send the announce message
     # no more botChannel (unless i want a special override). old message: \nIf you don't want these notifications, go to " + botChannel.mention + " and type ``" + prefix + "notify``.
@@ -242,6 +241,45 @@ async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     debug(f'Sent message to {str(announceChannel.guild)}: {sent}')
     dbStream.messageID = sent.id
     await dbStream.save(update_fields=['messageID'])
+
+async def announceYoutubeUpload(xmlBytes):
+    # https://developers.google.com/youtube/v3/guides/push_notifications
+    tree = lxml.etree.fromstring(xmlBytes)
+    if tree.find('entry', tree.nsmap) is None:
+        print('Ignoring deleted YouTube video.')
+        return
+    # store a copy of the youtube video number so i dont re-announce youtube videos if they just get updated, have to parse the xml of the text out for relevant bits
+    videoID = tree.find('entry/yt:videoId', tree.nsmap).text
+    channelID = tree.find('entry/yt:channelId', tree.nsmap).text
+    videoTitle = tree.find('entry/title', tree.nsmap).text
+    videoURL = tree.find('entry/link', tree.nsmap).get('href')
+    channelName = tree.find('entry/author/name', tree.nsmap).text
+    
+    # get the YoutubeChannel from db associated with this channel
+    dbChannel = await YoutubeChannel.get_or_none(id=channelID)
+    
+    if not dbChannel:
+        info(f'There is no channel in the database associated with {channelID}, so video {videoURL} will be ignored.')
+        return
+    else:
+        if videoID in dbChannel.announcedVideos:
+            info(f'Video {videoURL} has already been announced. Ignoring.')
+            return
+        elif dbChannel.announcedVideos:
+            dbChannel.announcedVideos.append(videoID)
+        else:
+            dbChannel.announcedVideos = [videoID]
+        await dbChannel.save(update_fields=['announcedVideos'])
+        
+    # loop through all the connected announcements, announcing them
+    async for announcement in dbChannel.youtubeAnnouncements:
+        await announcement.fetch_related('guild')
+        guild = bot.get_guild(announcement.guild.id)
+        announceChannel = guild.get_channel(announcement.channelID)
+        message = announcement.announcementText + f'\n**[{videoTitle}]({videoURL})**'
+        
+        sent = await announceChannel.send(message)
+        debug(f'Sent message to {str(announceChannel.guild)}: {sent}')
 
 # takes a space delimited list of discord guild ids and turns them into generic discord objects
 class GuildListTransformer(app_commands.Transformer):

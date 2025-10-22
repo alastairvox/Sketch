@@ -32,6 +32,7 @@ class DiscordGuild(models.Model):
     # get the user that invited the bot, and make them an authorized user for this server
     authorizedUsers: fields.ManyToManyRelation["DiscordUser"]
     twitchAnnouncements: fields.ReverseRelation["TwitchAnnouncement"]
+    youtubeAnnouncements: fields.ReverseRelation["YoutubeAnnouncement"]
     joinRoles: fields.ReverseRelation["DiscordJoinRole"]
 
 class DiscordUser(models.Model):
@@ -45,12 +46,12 @@ class DiscordUser(models.Model):
     sessionID = fields.TextField(null=True)
     profileImageURL = fields.TextField(null=True)
 
-    authorizedGuilds: fields.ManyToManyRelation["DiscordGuild"] = fields.ManyToManyField('models.DiscordGuild', related_name='authorizedUsers', through='discordauthorizedguild_user')
+    authorizedGuilds: fields.ManyToManyRelation["DiscordGuild"] = fields.ManyToManyField('models.DiscordGuild', related_name = 'authorizedUsers', through = 'discordauthorizedguild_user')
     
 class DiscordJoinRole(models.Model):
     id = UnsignedBigIntField(primary_key=True, generated=False)
     name = fields.TextField(null=True)
-    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='joinRoles', on_delete=fields.OnDelete.CASCADE)
+    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name = 'joinRoles', on_delete = fields.OnDelete.CASCADE)
         
 class TwitchAnnouncement(models.Model):
     id = fields.IntField(primary_key=True)
@@ -60,7 +61,41 @@ class TwitchAnnouncement(models.Model):
     offlineImageURL = fields.TextField(null=True)
     # parse this to get any roles that should be mentioned, etc. default will be no role mention
     announcementText = fields.TextField()
-    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name='twitchAnnouncements', on_delete=fields.OnDelete.CASCADE, null=True)
+    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name = 'twitchAnnouncements', on_delete = fields.OnDelete.CASCADE, null=True)
     channelID = UnsignedBigIntField()
     messageID = UnsignedBigIntField(null=True)
     ended = fields.DatetimeField(null=True)
+
+class YoutubeChannel(models.Model):
+    id = fields.CharField(primary_key=True, max_length=100, null=False)
+    
+    # https://tortoise.github.io/query.html?h=jsonfield
+    # https://tortoise.github.io/fields.html?h=jsonfield#tortoise.fields.data.JSONField
+    # filter __contains
+    announcedVideos = fields.JSONField[list](null=True)
+    leaseSeconds = fields.IntField(null=True)
+    time = fields.DatetimeField(null=True)
+    
+    youtubeAnnouncements: fields.ReverseRelation["YoutubeAnnouncement"]
+
+class YoutubeAnnouncement(models.Model):
+    id = fields.IntField(primary_key=True)
+    channelID = UnsignedBigIntField()
+    
+    # parse this to get any roles that should be mentioned, etc. default will be no role mention
+    announcementText = fields.TextField()
+    
+    # this will hold all the videos that have been announced for a channel, subscription stuff
+    youtubeChannel: fields.ForeignKeyRelation["YoutubeChannel"] = fields.ForeignKeyField('models.YoutubeChannel', related_name = 'youtubeAnnouncements', on_delete = fields.OnDelete.NO_ACTION, null=True)
+    guild: fields.ForeignKeyRelation["DiscordGuild"] = fields.ForeignKeyField('models.DiscordGuild', related_name = 'youtubeAnnouncements', on_delete = fields.OnDelete.CASCADE, null=True)
+    
+class YoutubeUser(models.Model):
+    id = fields.CharField(primary_key=True, max_length=100, null=False)
+    
+    name = fields.TextField(null=True)
+    accessToken = fields.TextField(null=True)
+    refreshToken = fields.TextField(null=True)
+    expiryTime = fields.DatetimeField(null=True)
+    profileImageURL = fields.TextField(null=True)
+    state = fields.TextField(null=True)
+    sessionID = fields.TextField(null=True)

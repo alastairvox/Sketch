@@ -1,6 +1,6 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_csrf, secrets, uuid, datetime, pytz
+import asyncio, aiohttp, aiohttp.web, logging, aiohttp_jinja2, jinja2, aiohttp_session, aiohttp_session.cookie_storage, aiohttp_csrf, secrets, uuid, datetime, pytz, base64, json
 from secrets import compare_digest
 from urllib.parse import urlencode
 from typing import Optional
@@ -151,7 +151,7 @@ async def getMessages(session: aiohttp_session.Session) -> list[str]:
         
     return messages
 
-# gets discord user object from discord API
+# gets discord user object from discord API using access token
 async def getDiscordUser(accessToken):
     debug(f'Getting ID from access token: {accessToken}')
     baseURL = 'https://discord.com/api/users/@me'
@@ -166,6 +166,21 @@ async def getDiscordUser(accessToken):
         debug('Response: ' + str(data))
         
         return data
+
+# http://dev.fyicenter.com/1001053_Decode_Google_OpenID_Connect_id_token.html
+async def getInfoFromEncodedGoogleIdToken(id_token):
+    debug('Decoding id token to retrieve users google id...')
+    # the id token is 3 base64 encoded strings delimited by a period, the header (0), the json (1), and the signature (2)
+    base64EncodedJSON = id_token.split('.')[1]
+    # google does not properly pad the base64 strings, so we need to add padding. normally this means doing something with a multiple of 4 characters, but we can just add the max number of padding and let the base64 decoder strip any unnecesary padding (as it is set to do by default)
+    decodedJSON = base64.b64decode(base64EncodedJSON + '==')
+    decodedDict = json.loads(decodedJSON)
+    
+    id = decodedDict.get('sub')
+    name = decodedDict.get('name')
+    profilePictureURL = decodedDict.get('picture')
+    
+    return (id, name, profilePictureURL)
 
 # exchanges a code token for an authentication token and refresh token from discord API
 # validates provided state variable against the one returned from discord
@@ -216,9 +231,92 @@ async def getDiscordCodeTokens(code, state, session: aiohttp_session.Session) ->
             result = f'<b class="success">Discord successfully authorized.</b><br>Hello, {dbUser.name}!'
         else:
             error('Response error: either no refresh token or access token provided. (or no JSON at all)')
-            result = '<b class="error">Error: peepee poopoo no tokens</b>'
+            result = '<b class="error">Error: either no refresh token or access token provided. (or no JSON at all)</b>'
             
         return result
+
+# https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#exchange-authorization-code
+# https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload
+async def getYoutubeTokens(code, state, session: aiohttp_session.Session) -> str:
+    debug('Getting refresh token using code: ' + str(code))
+
+    async with clientSession.post(
+        "https://oauth2.googleapis.com/token" + 
+        "?client_id=" + sketchAuth.ytClientID + 
+        "&client_secret=" + sketchAuth.ytClientSecret + 
+        "&code=" + code + 
+        "&grant_type=authorization_code" + 
+        "&redirect_uri=" + sketchAuth.baseCallbackURL + "youtube/callback"
+    ) as resp:
+        debug('Received response from YouTube for refresh token.')
+
+        # json encoded access token returned
+        data = await resp.json()
+        debug('Response: ' + str(data))
+
+        if data and data.get('refresh_token') and data.get('access_token'):
+            debug(f'refresh token: {data.get('refresh_token')}')
+            debug(f'access token: {data.get('access_token')}')
+            
+            expiryDelta = datetime.timedelta(seconds=data.get('expires_in'))
+            expiryDateTime = datetime.datetime.now(datetime.timezone.utc) + expiryDelta
+            
+            id, name, profileImageURL = getInfoFromEncodedGoogleIdToken(data.get('id_token'))
+            dbUser, _ = await YoutubeUser.get_or_create(id=id)
+            dbUser.name = name
+            dbUser.accessToken = data.get('access_token')
+            dbUser.refreshToken = data.get('refresh_token')
+            dbUser.expiryTime = expiryDateTime
+            dbUser.profileImageURL = profileImageURL
+            dbUser.state = state
+            dbUser.sessionID = session.get('ytSessionID')
+            
+            await YoutubeUser.update_or_create(id=dbUser.id, defaults=dict(dbUser))
+            
+            session['ytExpiryTime'] = expiryDateTime.isoformat()
+            session['ytUserID'] = id
+
+            result = f'<b class="success">Youtube successfully authorized.</b><br>Thank you!'
+        else:
+            error('Response error: either no refresh token or access token provided. (or no JSON at all)')
+            result = '<b class="error">Error: Youtube auth failed. Either no refresh token or access token provided. (or no JSON at all?)</b>'
+        
+        return result
+
+# this should be used before making an authorized request, such as when trying to get the scheduled videos of a user. we can check that the user is authorized before calling this similar to validating the discord auth, but with ytSessionID and ytState from session object. right now this should never be called
+# TODO: make this actually work
+# https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#offline
+async def refreshYoutubeAccessToken(userID):
+    # TODO code fallback for if refresh token becomes unusable (prompt re-authorization)
+    #   - https://i.stack.imgur.com/Uf8KZ.png
+    # what we should do is have this return True/False based on if it worked, and if it didn't, we can put an error message and ask the user to re-authorize youtube
+    debug('Refreshing access token for userID: ' + str(userID))
+
+    async with clientSession.post(
+        "https://oauth2.googleapis.com/token" + 
+        "?client_id=" + sketchAuth.ytClientID + 
+        "&client_secret=" + sketchAuth.ytClientSecret + 
+        "&grant_type=refresh_token" +
+        "&refresh_token=" + sketchAuth.ytRefreshToken
+    ) as resp:
+        debug('Received response from YouTube for access token.')
+
+        # json encoded access token returned
+        data = await resp.json()
+        debug('Response: ' + str(data))
+
+        # TODO store these tokens in DB / associated with userID
+        # TODO do something with the expires_in value returned
+        if data and data.get('access_token'):
+            debug('Refreshed access token for userID: ' + str(userID))
+
+            sketchAuth.ytAccessToken = data.get('access_token')
+
+            return True
+        else:
+            error("Request to refresh access token for userID: " + str(userID) + " failed: either no access token provided or no JSON at all.")
+
+            return False
 
 # validates user is logged in, validates session against database
 async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp.web.Request) -> DiscordUser | None:
@@ -266,6 +364,8 @@ async def validateDiscordAuth(session: aiohttp_session.Session, request: aiohttp
 
     error("No user variables in session.")
     return None
+
+# TODO create validateYoutubeAuth that is the same as discordAuth validation, but just removes the variables from the session cookie instead of making a new session
 
 async def checkAuthorized(user: DiscordUser, guildID) -> bool:
     if not guildID:
@@ -680,6 +780,167 @@ async def updateDiscordAnnouncement(request: aiohttp.web.Request):
 
     return aiohttp.web.HTTPSeeOther('/discord')
 
+# youtubeChannel = 'UCGPBgBHGdmr1VSaK_3Oitqw' # various artists - topic
+# youtubeChannel = 'UC-lHJZR3Gqxm24_Vd_AJ5Yw' # pewdiepie
+@routes.post('/discord/ytannouncement/add')
+async def addDiscordYTAnnouncement(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        authorized = await checkAuthorized(user, data.get('guild'))
+        
+        if not authorized:
+            session['messages'].append(f'''<b class="error">Failed creating Youtube announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+        else:
+            ytChannel, _ = await YoutubeChannel.get_or_create(id=data.get('ytChannelID'))
+            
+            dbGuild = await DiscordGuild.get(id=data.get('guild'))
+            announcement = await YoutubeAnnouncement.create(
+                channelID=data.get('channel'),
+                announcementText=data.get('announcementText'),
+                youtubeChannel=ytChannel,
+                guild=dbGuild
+            )
+            
+            if not ytChannel.announcedVideos:
+                responseStatus = await sketchYoutube.gatherYoutubeVideos(ytChannel)
+                if responseStatus != 200:
+                    session['messages'].append(f'<b class="error">Failed creating Youtube announcement. (Error {responseStatus} when attempting to get {data.get('ytChannelID')} from YouTube. Make sure you have provided a valid YouTube channel ID (like UC_0hyh6_G3Ct1k1EiqaorqQ).)</b><br>Please try again, or contact alastairvox on discord.')
+                    announcement.delete()
+                    ytChannel.delete()
+                    return aiohttp.web.HTTPSeeOther('/discord')
+                else:
+                    responseStatus = await sketchYoutube.subscribeToYoutubeUploads(ytChannel)
+                    if responseStatus != 202:
+                        session['messages'].append(f'<b class="error">Failed creating Youtube announcement. (Error {responseStatus} when attempting to get {data.get('ytChannelID')} from YouTube. Make sure you have provided a valid YouTube channel ID (like UC_0hyh6_G3Ct1k1EiqaorqQ).)</b><br>Please try again, or contact alastairvox on discord.')
+                        announcement.delete()
+                        ytChannel.delete()
+                        return aiohttp.web.HTTPSeeOther('/discord')
+            
+            session['messages'].append(f'<b class="success">Youtube announcement created.</b><br>Channel: {data.get('ytChannelID')}')
+            
+    return aiohttp.web.HTTPSeeOther('/discord')
+
+# if deleting the last announcement for a channel, delete the channel as well so it doesn't get it's subscriptions renewed
+@routes.post('/discord/ytannouncement/delete')
+async def deleteDiscordYTAnnouncement(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        announcement = await YoutubeAnnouncement.get_or_none(id=data.get('announcementID'))
+        if not announcement:
+            session['messages'].append(f'<b class="error">Failed deleting Youtube announcement. (Invalid announcement ID.)</b><br>Please try again, or contact alastairvox on discord.')
+        else:
+            await announcement.fetch_related("youtubeChannel", "guild")
+            authorized = await checkAuthorized(user, announcement.guild.id)
+    
+            if not authorized:
+                session['messages'].append(f'''<b class="error">Failed deleting Youtube announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+            else:
+                await announcement.fetch_related('youtubeChannel')
+                oldChannel = announcement.youtubeChannel
+                info(f'deleting announcement from db {announcement.id}')
+                await announcement.delete()
+                await oldChannel.refresh_from_db()
+                await oldChannel.fetch_related("youtubeAnnouncements")
+                
+                if not oldChannel.youtubeAnnouncements:
+                    info(f'deleting last announcement from ytChannel {announcement.youtubeChannel.id}')
+                    await oldChannel.delete()
+                    
+                session['messages'].append(f'<b class="success">Youtube announcement deleted.</b><br>Channel: {data.get('ytChannelID')}')
+            
+    return aiohttp.web.HTTPSeeOther('/discord')
+    
+@routes.post('/discord/ytannouncement/edit')
+async def updateDiscordYTAnnouncement(request: aiohttp.web.Request):
+    debug('Responding to ' + str(request) +
+    ' from ' + str(request.remote) +
+    ' headers ' + str(request.headers) +
+    ' body ' + str(await request.text()) +
+    ' thats it :)')
+    
+    session = await getSession(request)
+    user = await validateDiscordAuth(session, request)
+    
+    if user:
+        data = await request.post()
+        debug(data)
+        
+        announcement = await YoutubeAnnouncement.get_or_none(id=data.get('announcementID'))
+        if not announcement:
+            session['messages'].append(f'<b class="error">Failed editing Youtube announcement. (Invalid announcement ID.)</b><br>Please try again, or contact alastairvox on discord.')
+        else:
+            await announcement.fetch_related("youtubeChannel", "guild")
+            authorized = await checkAuthorized(user, announcement.guild.id)
+    
+            if not authorized:
+                session['messages'].append(f'''<b class="error">Failed editing Youtube announcement. (You are not in guild's authorized user list.)</b><br>Please try again, or contact alastairvox on discord.''')
+                return aiohttp.web.HTTPSeeOther('/discord')
+            else:
+                ytChannel, _ = await YoutubeChannel.get_or_create(id=data.get('ytChannelID'))
+                
+                oldChannel = None
+                if data.get('ytChannelID') != announcement.youtubeChannel.id:
+                    oldChannel = announcement.youtubeChannel
+
+                announcement.youtubeChannel = ytChannel
+                announcement.announcementText = data.get('announcementText')
+                announcement.channelID = data.get('channel')
+                await announcement.save()
+                
+                if not ytChannel.announcedVideos:
+                    responseStatus = await sketchYoutube.gatherYoutubeVideos(ytChannel)
+                    if responseStatus != 200:
+                        session['messages'].append(f'<b class="error">Failed updating Youtube announcement. (Error {responseStatus} when attempting to get {data.get('ytChannelID')} from YouTube. Make sure you have provided a valid YouTube channel ID (like UC_0hyh6_G3Ct1k1EiqaorqQ).)</b><br>Please try again, or contact alastairvox on discord.')
+                        if oldChannel:
+                            announcement.youtubeChannel = oldChannel
+                            await announcement.save()
+                        ytChannel.delete()
+                        return aiohttp.web.HTTPSeeOther('/discord')
+                    else:
+                        responseStatus = await sketchYoutube.subscribeToYoutubeUploads(ytChannel)
+                        if responseStatus != 202:
+                            session['messages'].append(f'<b class="error">Failed updating Youtube announcement. (Error {responseStatus} when attempting to get {data.get('ytChannelID')} from YouTube. Make sure you have provided a valid YouTube channel ID (like UC_0hyh6_G3Ct1k1EiqaorqQ).)</b><br>Please try again, or contact alastairvox on discord.')
+                            if oldChannel:
+                                announcement.youtubeChannel = oldChannel
+                                await announcement.save()
+                            ytChannel.delete()
+                            return aiohttp.web.HTTPSeeOther('/discord')
+                
+                if oldChannel:
+                    await oldChannel.refresh_from_db()
+                    await oldChannel.fetch_related("youtubeAnnouncements")
+                    # check if that channel now has no announcements
+                    if not oldChannel.youtubeAnnouncements:
+                        info(f'removing last announcement from ytChannel {oldChannel.id}')
+                        await oldChannel.delete()
+                
+                session['messages'].append(f'<b class="success">Twitch announcement edited.</b><br>Channel: {data.get('ytChannelID')}')
+
+    return aiohttp.web.HTTPSeeOther('/discord')
+
+
 # start discord authentication for user
 # store the refresh token, access token, expiry time, state, and sessionid in database
 # store the expiry time, user id, and state (random code) in the encrypted session cookie (sessionid already there)
@@ -747,74 +1008,119 @@ async def discordCallback(request: aiohttp.web.Request):
 
 # redirects user to google's oauth endpoint to begin oauth flow
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#httprest_1
-@routes.get('/youtube/auth/{userID}')
+@routes.get('/youtube/auth')
 async def youtubeAuth(request: aiohttp.web.Request):
-    userID = request.match_info.get('userID', '')
+    info(f'Redirecting {str(request.remote)} to Youtube to begin authentication...')
+    session = await getSession(request)
+    
+    newUUID = str(uuid.uuid4())
+    session['ytSessionID'] = str(newUUID)
+    
+    debug(f'Session has ID {session['ytSessionID']}')
+    
+    session['ytState'] = secrets.token_urlsafe(32) + '::sketch::' + session['ytSessionID']
 
-    debug('Responding to YouTube OAuth request for user: ' + str(userID))
+    scopes = 'openid https://www.googleapis.com/auth/youtube.force-ssl'
 
-    # TODO search database for this yt userID and see if it exists and is waiting for auth
-    #   - stop using 'True'
-    userFound = True
-
-    # if we have an entry for this user and are waiting for them to authenticate
-    if userFound:
-        info('Redirecting user to YouTube auth page, userID ' + str(userID) + ' found in database.')
-
-        scopes = 'openid https://www.googleapis.com/auth/youtube.force-ssl'
-
-        raise aiohttp.web.HTTPTemporaryRedirect("https://accounts.google.com/o/oauth2/v2/auth" + 
-        "?client_id=" + sketchAuth.ytClientID + 
-        "&redirect_uri=" + sketchAuth.baseCallbackURL + "youtube/callback" + 
-        "&response_type=code" + 
-        "&scope=" + scopes + 
-        "&access_type=offline" + 
-        "&state=" + str(userID) + 
-        "&include_granted_scopes=true")
-    else:
-        error('userID ' + str(userID) + ' not found in database.')
-        
-        return aiohttp.web.Response(text="""<div style="height: 100%; display: flex; justify-content: center; align-items: center">
-            <div>
-                <b>Error: This user is not waiting to authenticate.</b>
-            </div>
-        </div>""", content_type="text/html")
+    raise aiohttp.web.HTTPTemporaryRedirect("https://accounts.google.com/o/oauth2/v2/auth" + 
+    "?client_id=" + sketchAuth.ytClientID + 
+    "&redirect_uri=" + sketchAuth.baseCallbackURL + "youtube/callback" + 
+    "&response_type=code" + 
+    "&scope=" + scopes + 
+    "&access_type=offline" + 
+    "&state=" + str(session['ytState']) + 
+    "&include_granted_scopes=true")
 
 # receives return info from google's oauth endpoint
 # https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#handlingresponse
 @routes.get('/youtube/callback')
 async def youtubeCallback(request: aiohttp.web.Request):
-    debug('Responding to YouTube callback request.')
+    info('Responding to YouTube callback request.')
+    session = await getSession(request)
+    debug(f'Session has ID {session.get('ytSessionID')}')
 
     if 'code' not in request.query or 'state' not in request.query:
         error('YouTube callback request did not contain either state or code query attributes.')
 
         if 'error' in request.query:
-            error('Error: ' + str(request.query['error']))
-            
-            result = """<div style="height: 100%; display: flex; justify-content: center; align-items: center">
-                <div>
-                    <b>Error: Something went wrong with YouTube authorization. (""" + request.query['error'] + """)</b>
-                    <br>Please try again, or contact alastairvox on discord.
-                </div>
-            </div>"""
+            errorMessage = str(request.query['error'])
+            error('Error: ' + errorMessage)
+            session['messages'].append(f'<b class="error">Error: Something went wrong with Youtube authorization. ({errorMessage})</b><br>Please try again, or contact alastairvox on discord.')
+            session.changed()
+        
         else:
             error('No error provided: attempted attack? Youtube should always provide an error. Request: ' + str(request))
-
-            result = """<div style="height: 100%; display: flex; justify-content: center; align-items: center">
-                <div>
-                    <b>Error: Something went wrong with YouTube authorization. (Unknown Error)</b>
-                    <br>Please try again, or contact alastairvox on discord.
-                </div>
-            </div>"""
+            session['messages'].append('<b class="error">Error: Something went wrong with Youtube authorization. (Unknown Error)</b><br>Please try again, or contact alastairvox on discord.')
+            session.changed()
     else:
         # use code query attribute to request and store refresh token
-        info('Received YouTube callback, getting tokens (refresh, access, id) for userID ' + str(request.query['state']))
-        debug('Request has code: ' + str(request.query['code']))
+        info('Received YouTube callback, getting tokens (refresh, access, id)')
+        state = str(request.query['state'])
+        code = str(request.query['code'])
+        # validate state, then use code query attribute to request and store refresh token
+        debug(f'Request has code: {code} and state: {state}')
         
-        result = await sketchYoutube.getYoutubeTokens(request.query['code'], request.query['state'])
+        debug('Validating state...')
+        if state != str(session.get('ytState')):
+            error(f'Youtube callback request state mismatch. Cookie state: {str(session.get('ytState'))} and request state: {state}')
+            session['messages'].append(f'<b class="error">Error: Something went wrong with Youtube authorization. (Invalid State)</b><br>Please try again, or contact alastairvox on discord.')
+            session.changed()
+        else:
+            result = await getYoutubeTokens(request.query['code'], request.query['state'], session)
+            session['messages'].append(result)
+            session.changed()
     
-    return aiohttp.web.Response(text=result, content_type="text/html")
+    raise aiohttp.web.HTTPSeeOther('/discord')
+
+# called by the hub to establish a new lease when subscribing to youtube uploads
+@routes.get('/youtube/{ytChannelID}')
+async def youtube(request: aiohttp.web.Request):
+    debug(f'Responding to {request}')
+    if hasattr(request, 'query'):
+        channel = request.query.get('hub.topic')
+        if channel:
+            channel = channel.split('channel_id=')[1]   # [0] = the url https://www.youtube.com/xml/feeds/videos.xml? or any params that came before the channel_id param, [1] = the channel id and any params that come after the channel_id
+            channel = channel.split('&')[0]             # [0] = the channel id [1]+ = other params that came after channel_id
+        
+        hubChallenge = request.query.get('hub.challenge')
+        if request.query.get('hub.lease_seconds'):
+            leaseSeconds = int(request.query.get('hub.lease_seconds'))-90
+        else:
+            leaseSeconds = None
+
+        if channel and hubChallenge and leaseSeconds:
+            # store them in youtube config, we'll check later to see if we need to renew by by finding the difference between the time it was stored and the time it is now in seconds and seeing if >= leaseSeconds and if it is then resubscribe
+            updates = {
+                'leaseSeconds': leaseSeconds,
+                'time': datetime.datetime.now(datetime.timezone.utc)
+            }
+            dbChannel, _ = await YoutubeChannel.update_or_create(id=channel, defaults=updates)
+            
+            # CALL FUNCTION THAT AWAITS SLEEP FOR THE NUMBER OF SECONDS EQUAL TO the stored leaseSeconds (because i subtract 90 when storing) then calls the resubscribe, make a function that will look through all the stored youtube channels when discord starts, and calls the same function for each channel that has a leaseSeconds stored
+            loop = asyncio.get_event_loop()
+            loop.create_task(sketchYoutube.youtubeWaitForResub(leaseSeconds, dbChannel))
+            info(f'Lease aquired for channel {channel}')
+            return aiohttp.web.Response(status=200, text=hubChallenge)
+        else:
+            error(f'missing channel, challenge or lease: {await request.text()}')
+            return aiohttp.web.Response(status=404, text="missing channel, challenge or lease")
+    else:
+        error('Youtube request has no query attribute!')
+        error(await request.text())
+        return aiohttp.web.Response(status=404, text="what are you doing")
+
+
+@routes.post('/youtube/{ytChannelID}')
+@aiohttp_csrf.csrf_exempt
+async def youtubeUploadedNotification(request: aiohttp.web.Request):
+    ytChannelID = request.match_info['ytChannelID']
+    # store a copy of the youtube video number so i dont re-announce youtube videos if they just get updated: have to parse the xml of the text out for relevant bits
+    # pass the text (xml, xml.etree.ElementTree?) to a discord function that parses out the author name, video title, URL (<link rel="alternate" href="), and the time published and then announces the stream
+    debug(f'Responding to {request} for {ytChannelID}')
+    # we add this to the end of the event loop so that we can return a response to the request right away, allowing us to respond and then process the data later
+    loop = asyncio.get_event_loop()
+    loop.create_task(sketchDiscord.announceYoutubeUpload(await request.read()))
+    return aiohttp.web.Response(status=200)
 
 @routes.post('/test')
 async def test(request: aiohttp.web.Request):

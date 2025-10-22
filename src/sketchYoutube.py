@@ -1,14 +1,15 @@
 import sketchShared
 from sketchShared import debug, info, warn, error, critical
-import base64, json
+import asyncio, datetime, dateutil
 import sketchAuth, sketchServer
+from sketchModels import *
 
-# TODO sketchServer: endpoints to receive YT oauth2 & pubsub
+# sketchServer: endpoints to receive YT oauth2 & pubsub
 #   - use dev pc as callback/host (port forward?)
-# TODO sketchRequest: endpoint to receive from sketchServer, WS connections & start pubsub/topic requests
+# sketchRequest: endpoint to receive from sketchServer, WS connections & start pubsub/topic requests
 #   - get oauth2 tokens, pubsub updates
-# TODO create DB, move sketchAuth.py to DB
-# TODO store videos in DB
+# create DB, move sketchAuth.py to DB
+# store videos in DB
 
 # alastairvods channel
 ytTestChannel = 'UCmkonxPPduKnLNWvqhoHl_g'
@@ -22,131 +23,76 @@ ytTestChannel = 'UCmkonxPPduKnLNWvqhoHl_g'
 # o user visits sketchServer to perform oauth2 with google / yt api
 # o sketchServer passes refresh token to sketchRequest
 # o sketchRequest uses refresh token to receive access token
-# - call PlaylistItems with parts "snippet, contentDetails, status" to get all uploaded videos
+# o call PlaylistItems with parts "snippet, contentDetails, status" to get all uploaded videos
 # - call videos with parts "status" for all private videos (unlisted cant be scheduled)
 #   - GET https://www.googleapis.com/youtube/v3/videos
 #   - can only request 50 video ids at once (no pagination supported)
 #   - get status.publishAt to see when the video will be published
-# - subscribe to the channel for video updates so that we are notified when a video might be changing schedule / becoming private / unlisted
+# o subscribe to the channel for video updates so that we are notified when a video might be changing schedule / becoming private / unlisted
 #   - update the video in the database when notified about it
 
-# https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#exchange-authorization-code
-# https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload
-async def getYoutubeTokens(code, userID):
-    debug('Getting refresh token using code: ' + str(code) + ' for userID: ' + str(userID))
+# subscribes to every channel in database for notifications about new videos from youtube
+async def youtubePrepareAllResubs():
+    loop = asyncio.get_event_loop()
+    async for channel in YoutubeChannel.all():
+        leaseSeconds = channel.leaseSeconds
+        timeAdded = channel.time
+        if leaseSeconds and timeAdded:
+            leaseSecondsDelta = datetime.timedelta(seconds=leaseSeconds)
+            timeNow = datetime.datetime.now(datetime.timezone.utc)
+            timeDifference = timeNow - timeAdded
+            if timeDifference >= leaseSecondsDelta:
+                # resub immediately
+                loop.create_task(subscribeToYoutubeUploads(channel))
+            else:
+                timeDifference = leaseSecondsDelta - timeDifference
+                loop.create_task(youtubeWaitForResub(timeDifference.total_seconds(), channel))
 
-    async with sketchServer.session.post(
-        "https://oauth2.googleapis.com/token" + 
-        "?client_id=" + sketchAuth.ytClientID + 
-        "&client_secret=" + sketchAuth.ytClientSecret + 
-        "&code=" + code + 
-        "&grant_type=authorization_code" + 
-        "&redirect_uri=" + sketchAuth.baseCallbackURL + "youtube/callback"
-    ) as resp:
-        debug('Received response from YouTube for refresh token.')
+# waits to re-subscribe until subscription expiry
+async def youtubeWaitForResub(seconds, youtubeChannel: YoutubeChannel):
+    info(f'waiting {seconds} seconds to resub to {youtubeChannel.id}')
+    await asyncio.sleep(seconds)
+    await subscribeToYoutubeUploads(youtubeChannel)
 
-        # json encoded access token returned
-        data = await resp.json()
-        debug('Response: ' + str(data))
-
-        # TODO store these tokens in DB / associated with userID
-        # TODO do something with the expires_in value returned
-        if data and data.get('refresh_token') and data.get('access_token'):
-            info('Received tokens for userID: ' + str(userID))
-
-            sketchAuth.ytRefreshToken = data.get('refresh_token')
-            sketchAuth.ytAccessToken = data.get('access_token')
-            sketchAuth.ytId = await getUserIdFromEncodedGoogleIdToken(data.get('id_token'))
-
-            result = """
-                <div style="height: 100%; display: flex; justify-content: center; align-items: center">
-                    <div>
-                        <b>YouTube authorization successful!</b>
-                    </div>
-                </div>
-            """
-            await refreshYoutubeAccessToken('80085')
-        else:
-            error('Response error: either no refresh token or access token provided. (or no JSON at all)')
-            
-            result = """
-                <div style="height: 100%; display: flex; justify-content: center; align-items: center">
-                    <div>
-                        <b>Error: Something went wrong with YouTube authorization.</b>
-                        <br>Please try again, or contact alastairvox on discord.
-                    </div>
-                </div>
-            """
+# pubsub connection for notifications about uploads
+async def subscribeToYoutubeUploads(ytChannel: YoutubeChannel):
+    try:
+        # if the channel has been deleted from the database this should cause some error
+        await ytChannel.refresh_from_db()
+        await ytChannel.fetch_related("youtubeAnnouncements")
+        if not ytChannel.youtubeAnnouncements:
+            # there are no yt announcements
+            info(f'attempted subscription refresh for channel {ytChannel.id} with no associated announcements, so deleting')
+            await ytChannel.delete()
+            return 500
+        baseCallbackURL = sketchAuth.devPublicCallbackURL if sketchShared.dev else sketchAuth.baseCallbackURL
+        callbackURL = f'{baseCallbackURL}youtube/{ytChannel.id}'
         
-        return result
-
-# http://dev.fyicenter.com/1001053_Decode_Google_OpenID_Connect_id_token.html
-async def getUserIdFromEncodedGoogleIdToken(id_token):
-    debug('Decoding id token to retrieve users google id...')
-    # the id token is 3 base64 encoded strings delimited by a period, the header (0), the json (1), and the signature (2)
-    base64EncodedJSON = id_token.split('.')[1]
-    # google does not properly pad the base64 strings, so we need to add padding. normally this means doing something with a multiple of 4 characters, but we can just add the max number of padding and let the base64 decoder strip any unnecesary padding (as it is set to do by default)
-    decodedJSON = base64.b64decode(base64EncodedJSON + '==')
-    decodedDict = json.loads(decodedJSON)
-    return decodedDict['sub']
+        async with sketchServer.clientSession.post(f'https://pubsubhubbub.appspot.com/subscribe?hub.callback={callbackURL}&hub.topic=https://www.youtube.com/xml/feeds/videos.xml?channel_id={ytChannel.id}&hub.verify=async&hub.mode=subscribe') as resp:
+            info(f'Subscription request to youtube channel {ytChannel.id} completed with status {resp.status}')
+            return resp.status
+    except:
+        return 500
+    
 
 
-# https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps#offline
-async def refreshYoutubeAccessToken(userID):
-    # TODO code fallback for if refresh token becomes unusable (prompt re-authorization)
-    #   - https://i.stack.imgur.com/Uf8KZ.png
-    debug('Refreshing access token for userID: ' + str(userID))
+# gets all youtube videos from a channel that have been uploaded
+# stores them in the database rn as a list in json format associated with a YoutubeChannel
+async def gatherYoutubeVideos(ytChannel: YoutubeChannel):
+    info(f'Beginning requests to collect all youtube videos for {ytChannel.id}')
 
-    async with sketchServer.session.post(
-        "https://oauth2.googleapis.com/token" + 
-        "?client_id=" + sketchAuth.ytClientID + 
-        "&client_secret=" + sketchAuth.ytClientSecret + 
-        "&grant_type=refresh_token" +
-        "&refresh_token=" + sketchAuth.ytRefreshToken
-    ) as resp:
-        debug('Received response from YouTube for access token.')
-
-        # json encoded access token returned
-        data = await resp.json()
-        debug('Response: ' + str(data))
-
-        # TODO store these tokens in DB / associated with userID
-        # TODO do something with the expires_in value returned
-        if data and data.get('access_token'):
-            debug('Refreshed access token for userID: ' + str(userID))
-
-            sketchAuth.ytAccessToken = data.get('access_token')
-
-            return True
-        else:
-            error("Request to refresh access token for userID: " + str(userID) + " failed: either no access token provided or no JSON at all.")
-
-            return False
-
-# TODO GET PlaylistItems with parts "snippet, contentDetails, status" to get all uploaded videos
-# https://developers.google.com/youtube/v3/docs/playlistItems/list
-async def gatherYoutubeVideos(channelID):
-    info('Beginning requests to collect all youtube videos for ' + str(channelID))
-
-    userAuthenticated = True
-    videoDictionary = {}
+    videoList = []
 
     # need user's "upload playlist" (search is limited to 500 videos and costs 100 query units vs 1 for list)
     # - the id of this playlist is the same as the channel's ID but the UC at the start is replaced with UU
-    uploadPlaylist = channelID.replace('UC', 'UU', 1)
+    uploadPlaylist = ytChannel.id.replace('UC', 'UU', 1)
 
-    if userAuthenticated:
-        debug('User has previously authenticated: getting private and unlisted videos.')
-        await refreshYoutubeAccessToken(':)')
-        params = {'part': 'snippet, contentDetails, status', 'maxResults': 50, 'playlistId': uploadPlaylist, 'access_token': sketchAuth.ytAccessToken}
-    else:
-        params = {'part': 'snippet, contentDetails, status', 'maxResults': 50, 'playlistId': uploadPlaylist, 'key': sketchAuth.ytAppToken}
+    params = {'part': 'snippet, contentDetails, status', 'maxResults': 50, 'playlistId': uploadPlaylist, 'key': sketchAuth.ytAppToken}
 
     # call PlaylistItems with parts "snippet, contentDetails, status" to get all uploaded videos
     # - use pagination to get info for all videos (max 50 per page)
-
     while True:
-        async with sketchServer.session.get('https://www.googleapis.com/youtube/v3/playlistItems', params=params) as resp:
+        async with sketchServer.clientSession.get('https://www.googleapis.com/youtube/v3/playlistItems', params=params) as resp:
             if resp.status != 200:
                 return resp.status
             else:
@@ -157,7 +103,8 @@ async def gatherYoutubeVideos(channelID):
                 debug('Got response with next page: ' + str(nextPage))
 
                 if items:
-                    videoDictionary = await createVideoDictionary(items)
+                    for video in data['items']:
+                        videoList.append(video['contentDetails']['videoId'])
                 else:
                     return resp.status
                 
@@ -165,11 +112,16 @@ async def gatherYoutubeVideos(channelID):
                     params['pageToken'] = nextPage
                 else:
                     break
-
-    info('Finished requests for ' + str(channelID) + ' videos. Inserted ' + str(len(videoDictionary)) + ' videos into database.')
-    debug(str(videoDictionary))
+    
+    # insert all collected videos into database so only new ones are announced from here
+    ytChannel.announcedVideos = videoList
+    await ytChannel.save(update_fields=['announcedVideos'])
+    info(f'Finished requests for {ytChannel.id} videos. Inserted {len(videoList)} videos into database.')
+    debug(str(videoList))
     return resp.status
 
+# This is used when getting info from YT for displaying videos on the site, scheduling etc.
+# To use this, I will need to change the JSONField to store dicts, or create a model for individual videos that store their id, titles, privacy status, etc. and create a one-to-many relation from the channel to the many videos
 # creates / updates dictionary with video data from a list returned by youtube
 # get status.privacyStatus to see if public, private, or unlisted (only care about private/unlisted)
 # get snippet.title, snippet.thumbnails.(key).url (key is res value)
@@ -187,11 +139,5 @@ async def createVideoDictionary(items, vidDict={}):
 # TODO GET videos with parts "status" for schedule date of all private videos (unlisted cant be scheduled)
 async def getScheduledDates(channelID, vidDict):
     pass
-
-# TODO pubsub connection
-async def subscribeToYoutubeUploads(channelID):
-    pass
-
-
 
 # TODO retrieve / determine current youtube API quota usage

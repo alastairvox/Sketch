@@ -107,7 +107,7 @@
                                                 <li>None</li>
                                             {% endif %}
                                             <li><form id="{{guild.id}}-newAnnouncementForm" method="POST" action="/discord/announcement/add">
-                                                <details><summary>New Announcement</summary>
+                                                <details><summary>New Twitch Announcement</summary>
                                                     <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
                                                     <input type="hidden" name="guild" value="{{guild.id}}"/>
                                                     <label for="{{guild.id}}-streamName">Stream:</label>
@@ -122,10 +122,66 @@
                                                         {% endif %}
                                                     </select>
                                                     <br>
-                                                    <label for="{{guild.id}}-announcementText">Announce Message: <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by putting <code>\:CUSTOM_EMOJI:</code> into a message on Discord!)</small>
+                                                    <label for="{{guild.id}}-announcementText">Announce Message: <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by sending a message on Discord with <code>\:CUSTOM_EMOJI:</code>!)</small>
                                                     </label>
                                                     <br>
                                                     <textarea class="announcementText" id="{{guild.id}}-announcementText" name="announcementText" maxlength="1900"></textarea>
+                                                    <input type="submit" value="Add Announcement">
+                                                </details>
+                                            </form></li>
+                                        </ul>
+                                    </li>
+                                    <li><h3>Youtube Announcements:</h3>
+                                        <ul>
+                                            {% if guild.youtubeAnnouncements %}
+                                                {% for announcement in guild.youtubeAnnouncements %}
+                                                    {% set ns = namespace(currentChannelName='') %}
+                                                    {% for channel in discordGuilds[guild.id].text_channels %}
+                                                        {% if channel.id == announcement.channelID %}
+                                                            {% set ns.currentChannelName = channel.name %}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                    <li><form id="{{announcement.id}}-manageYTAnnouncementForm" class="manageAnnouncementForm" method="POST" action="/discord/ytannouncement/delete">
+                                                        <fieldset>
+                                                            <legend><b>{{ announcement.youtubeChannel.id }}</b></legend>
+                                                            <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                            <input type="hidden" name="announcementID" value="{{announcement.id}}"/>
+                                                            <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                            <input type="hidden" name="ytChannelID" value="{{announcement.youtubeChannel.id}}"/>
+                                                            <span>
+                                                                #{{ ns.currentChannelName|e }}: {{ announcement.announcementText|e }}
+                                                                <div>
+                                                                    <button data-guild="{{guild.id}}" data-channel="{{announcement.channelID}}" data-announcement="{{announcement.id}}" type="button" value="Edit" onclick="editYTAnnouncement(this)">Edit</button>
+                                                                    <input type="submit" value="Delete">
+                                                                </div>
+                                                            </span>
+                                                        </fieldset>
+                                                    </form></li>
+                                                {% endfor %}
+                                            {% else %}
+                                                <li>None</li>
+                                            {% endif %}
+                                            <li><form id="{{guild.id}}-newYTAnnouncementForm" method="POST" action="/discord/ytannouncement/add">
+                                                <details><summary>New Youtube Announcement</summary>
+                                                    <input type="hidden" name="_csrf_token" value="{{csrfToken}}"/>
+                                                    <input type="hidden" name="guild" value="{{guild.id}}"/>
+                                                    <label for="{{guild.id}}-ytChannelID">Youtube Channel: <small>(<a href="https://support.google.com/youtube/answer/3250431?hl=en">Channel ID</a>, like <code>UC3tNpTOHsTnkmbwztCs30sA</code>.)</small></label>
+                                                    <input class="ytChannelID" type="text" id="{{guild.id}}-ytChannelID" name="ytChannelID" size="40" required/>
+                                                    <br>
+                                                    <label for="{{guild.id}}-channel">Announcement channel:</label>
+                                                    <select class="channel" id="{{guild.id}}-channel" name="channel" required>
+                                                        {% if discordGuilds %}
+                                                            {% for channel in discordGuilds[guild.id].text_channels %}
+                                                                <option value="{{channel.id}}">{{channel.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <br>
+                                                    <label for="{{guild.id}}-announcementText">Announce Message: <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by sending a message on Discord with <code>\:CUSTOM_EMOJI:</code>!)</small>
+                                                    </label>
+                                                    <br>
+                                                    <textarea class="announcementText" id="{{guild.id}}-announcementText" name="announcementText" maxlength="1900"></textarea>
+                                                    <span class="error">Note: Adding a channel with many videos may take a LONG time, don't refresh, don't panic - just let it load!</span>
                                                     <input type="submit" value="Add Announcement">
                                                 </details>
                                             </form></li>
