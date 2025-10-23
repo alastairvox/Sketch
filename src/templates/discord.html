@@ -18,7 +18,7 @@
             <h1>Manage Guilds</h1>
                 {% if guilds %}
                     <ul class="guildList">
-                        {% for guild in guilds %}
+                        {% for guild in guilds|reverse %}
                             <li class="guildListItem"><form id="{{guild.id}}-manageGuildForm" class="manageGuildForm" method="POST" action="/discord/config">
                                     <fieldset>
                                         <legend><b>{{ guild.name }} Configuration</b></legend>
