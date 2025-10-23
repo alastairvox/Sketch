@@ -122,8 +122,54 @@
                                                         {% endif %}
                                                     </select>
                                                     <br>
-                                                    <label for="{{guild.id}}-announcementText">Announce Message: <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by sending a message on Discord with <code>\:CUSTOM_EMOJI:</code>!)</small>
-                                                    </label>
+                                                    <label for="{{guild.id}}-announcementText">Announce Message:</label>
+                                                    <br>
+                                                    <label for="{{guild.id}}-specialSelect"><small>Insert special mention:</small></label>
+                                                    <select class="specialSelect" id="{{guild.id}}-specialSelect" name="specialSelect" onchange="updateSpecialSelectType(this)">
+                                                        <option selected disabled hidden>Choose Type</option>
+                                                        <option value="Role">Role</option>
+                                                        <option value="Channel">Channel</option>
+                                                        <option value="Emoji">Custom Emoji</option>
+                                                        <option value="User">User</option>
+                                                    </select>
+                                                    {# https://discord.com/developers/docs/reference#message-formatting #}
+                                                    <select class="specialSelectInsert specialSelectRole" id="{{guild.id}}-specialSelectRole" name="specialSelectRole" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose Role</option>
+                                                        <option value="@everyone">Everyone</option>
+                                                        <option value="@here">Here</option>
+                                                        {% if discordGuilds %}
+                                                            {% for role in discordGuilds[guild.id].roles %}
+                                                                {% if role.name == "@everyone" %}
+                                                                {% else %}
+                                                                    <option value="<@&{{role.id}}>">{{role.name}} ({{role.id}})</option>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <select class="specialSelectInsert specialSelectChannel" id="{{guild.id}}-specialSelectChannel" name="specialSelectChannel" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose Channel</option>
+                                                        {% if discordGuilds %}
+                                                            {% for channel in discordGuilds[guild.id].channels %}
+                                                                <option value="<#{{channel.id}}>">{{channel.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <select class="specialSelectInsert specialSelectEmoji" id="{{guild.id}}-specialSelectEmoji" name="specialSelectEmoji" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose Emoji</option>
+                                                        {% if discordGuilds %}
+                                                            {% for emoji in discordGuilds[guild.id].emojis %}
+                                                                <option value="{{emoji}}">{{emoji.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <select class="specialSelectInsert specialSelectUser" id="{{guild.id}}-specialSelectUser" name="specialSelectUser" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose User</option>
+                                                        {% if discordGuilds %}
+                                                            {% for member in discordGuilds[guild.id].members %}
+                                                                <option value="<@{{member.id}}>">{% if member.global_name %}{{member.global_name}}{% else %}{{ member.name }}{% endif %} ({{member.name}})</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
                                                     <br>
                                                     <textarea class="announcementText" id="{{guild.id}}-announcementText" name="announcementText" maxlength="1900"></textarea>
                                                     <input type="submit" value="Add Announcement">
@@ -177,10 +223,57 @@
                                                         {% endif %}
                                                     </select>
                                                     <br>
-                                                    <label for="{{guild.id}}-announcementText">Announce Message: <small>(To mention by role ID, type <code><@&ROLE_ID></code>. To use custom emoji, find emoji codes by sending a message on Discord with <code>\:CUSTOM_EMOJI:</code>!)</small>
-                                                    </label>
+                                                    <label for="{{guild.id}}-announcementText">Announce Message:</label>
+                                                    <br>
+                                                    <label for="{{guild.id}}-specialSelect"><small>Insert special mention:</small></label>
+                                                    <select class="specialSelect" id="{{guild.id}}-specialSelect" name="specialSelect" onchange="updateSpecialSelectType(this)">
+                                                        <option selected disabled hidden>Choose Type</option>
+                                                        <option value="Role">Role</option>
+                                                        <option value="Channel">Channel</option>
+                                                        <option value="Emoji">Custom Emoji</option>
+                                                        <option value="User">User</option>
+                                                    </select>
+                                                    {# https://discord.com/developers/docs/reference#message-formatting #}
+                                                    <select class="specialSelectInsert specialSelectRole" id="{{guild.id}}-specialSelectRole" name="specialSelectRole" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose Role</option>
+                                                        <option value="@everyone">Everyone</option>
+                                                        <option value="@here">Here</option>
+                                                        {% if discordGuilds %}
+                                                            {% for role in discordGuilds[guild.id].roles %}
+                                                                {% if role.name == "@everyone" %}
+                                                                {% else %}
+                                                                    <option value="<@&{{role.id}}>">{{role.name}} ({{role.id}})</option>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <select class="specialSelectInsert specialSelectChannel" id="{{guild.id}}-specialSelectChannel" name="specialSelectChannel" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose Channel</option>
+                                                        {% if discordGuilds %}
+                                                            {% for channel in discordGuilds[guild.id].channels %}
+                                                                <option value="<#{{channel.id}}>">{{channel.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <select class="specialSelectInsert specialSelectEmoji" id="{{guild.id}}-specialSelectEmoji" name="specialSelectEmoji" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose Emoji</option>
+                                                        {% if discordGuilds %}
+                                                            {% for emoji in discordGuilds[guild.id].emojis %}
+                                                                <option value="{{emoji}}">{{emoji.name}}</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
+                                                    <select class="specialSelectInsert specialSelectUser" id="{{guild.id}}-specialSelectUser" name="specialSelectUser" onchange="addSpecialMention(this)">
+                                                        <option selected disabled hidden>Choose User</option>
+                                                        {% if discordGuilds %}
+                                                            {% for member in discordGuilds[guild.id].members %}
+                                                                <option value="<@{{member.id}}>">{% if member.global_name %}{{member.global_name}}{% else %}{{ member.name }}{% endif %} ({{member.name}})</option>
+                                                            {% endfor %}
+                                                        {% endif %}
+                                                    </select>
                                                     <br>
                                                     <textarea class="announcementText" id="{{guild.id}}-announcementText" name="announcementText" maxlength="1900"></textarea>
+                                                    <br>
                                                     <span class="error">Note: Adding a channel with many videos may take a LONG time, don't refresh, don't panic - just let it load!</span>
                                                     <input type="submit" value="Add Announcement">
                                                 </details>

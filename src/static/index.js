@@ -158,3 +158,32 @@ function editYTAnnouncement(button) {
 
   addForm.querySelector('details').setAttribute('open', '');
 }
+
+function addSpecialMention(select){
+  var newText = select.value;
+
+  // if input element, then can do var form = element.form;
+  // closest travels up from the element to its parents looking for the css selector
+  const addForm = select.closest('form')
+  var textBox = addForm.querySelector('.announcementText');
+
+  const currentText = textBox.value;
+  if (currentText != "") {
+    newText = " " + newText
+  }
+  textBox.value = currentText + newText;
+}
+
+function updateSpecialSelectType(select) {
+  selectedType = select.value;
+
+  const addForm = select.closest('form')
+  var allSelectors = addForm.querySelectorAll('.specialSelectInsert')
+  var newSelector = addForm.querySelector('.specialSelect' + selectedType);
+
+  for (var selector of allSelectors) {
+    selector.classList.remove("active")
+  }
+
+  newSelector.classList.add("active")
+}

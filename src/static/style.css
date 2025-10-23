@@ -151,3 +151,11 @@ pre {
     flex-direction: column-reverse;
     font-family: 'Iosevka Vox', 'Hack FC L CCG Nerd Font', Hackd, Hack, 'Cascadia Code', Consolas, 'Courier New', monospace;
 }
+
+.specialSelectInsert {
+    display: none;
+}
+
+.specialSelectInsert.active{
+    display: unset;
+}
