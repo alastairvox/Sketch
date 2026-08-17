@@ -11,7 +11,8 @@ async def init():
         # Database connection configuration
         db_url= f"mysql://sketch:{sketchAuth.dbPassword}@{sketchAuth.dbHost}:{sketchAuth.dbPort}/sketch",
         # Path to your models module
-        modules={'models': ['sketchModels']}
+        modules={'models': ['sketchModels']},
+        _enable_global_fallback = True
     )
     # Generate schemas for all models, safe=True means it will only recreate the tables when they arent there
     await Tortoise.generate_schemas(safe=True)
