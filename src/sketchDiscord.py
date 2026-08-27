@@ -230,7 +230,7 @@ async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     embed.set_author(name=twitchioStream.title, url='https://twitch.tv/' + twitchioStream.user.name, icon_url=profileURL)
     debug(profileURL)
     debug(embed.author)
-    if game and hasattr(game, "box_art", False):
+    if game and getattr(game, "box_art", False):
         embed.set_thumbnail(url=game.box_art.base_url.replace('-{width}x{height}', '').replace('/ttv-boxart/./', '/ttv-boxart/'))
     else:
         embed.set_thumbnail(url='https://static-cdn.jtvnw.net/ttv-static/404_boxart.jpg')
