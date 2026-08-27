@@ -48,13 +48,14 @@ async def checkStreams():
             
             try:
                 response = await bot.fetch_streams(user_ids=[stream.streamID for stream in streamsToCheck], first=100)
-            except twitchio.HTTPException as error:
-                error('HTTPException getting stream information: ' + str(error))
+            except twitchio.HTTPException as err:
+                error('HTTPException getting stream information: ' + str(err))
                 continue
             else:
                 await notifyStreams(response)
         
-        except Exception as error:
+        except Exception as err:
+            error('Some unknown error when checking streams: ' + str(err))
             error(traceback.print_exc())
             continue
         
@@ -100,7 +101,7 @@ async def notifyStreams(streams: list[twitchio.Stream]):
             # going live, but there's an "ended" entry for the stream, so removal was being delayed due to spam ping protection and they went live again within the time limit
             info(announcement.streamName + ' went live again within grace period.')
             announcement.ended = None
-            announcement.save(update_fields=['ended'])
+            await announcement.save(update_fields=['ended'])
             
     # get information about the games that are being played, including game name and game image
     if games:

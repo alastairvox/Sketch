@@ -218,7 +218,7 @@ async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
 
     # text content
     message = dbStream.announcementText
-
+    
     # embed content
     embed = discord.Embed()
     embed.title = 'https://twitch.tv/' + twitchioStream.user.name
@@ -230,12 +230,15 @@ async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     embed.set_author(name=twitchioStream.title, url='https://twitch.tv/' + twitchioStream.user.name, icon_url=profileURL)
     debug(profileURL)
     debug(embed.author)
-    if game and game.box_art:
+    if game and hasattr(game, "box_art", False):
         embed.set_thumbnail(url=game.box_art.base_url.replace('-{width}x{height}', '').replace('/ttv-boxart/./', '/ttv-boxart/'))
     else:
         embed.set_thumbnail(url='https://static-cdn.jtvnw.net/ttv-static/404_boxart.jpg')
     embed.add_field(name='Started',value=dateString, inline=True)
-    embed.add_field(name='Playing',value=game.name, inline=True)
+    if game:
+        embed.add_field(name='Playing',value=game.name, inline=True)
+    else:
+        embed.add_field(name='Playing',value="Unknown Game", inline=True)
 
     sent = await announceChannel.send(message, embed=embed)
     debug(f'Sent message to {str(announceChannel.guild)}: {sent}')
