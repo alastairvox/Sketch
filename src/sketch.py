@@ -83,7 +83,7 @@ def main():
     loop.create_task(sketchDiscord.summon())
     
     # apparently twitchio is super unreliable, keeps getting "temporary name failure", so we have a special exponential backoff retry function that restarts it after it fails
-    loop.create_task(retryFailedTasks(sketchTwitch.summon()))
+    loop.create_task(retryFailedTasks(sketchTwitch.summon))
     
     loop.create_task(sketchServer.summon())
     loop.create_task(sketchYoutube.youtubePrepareAllResubs())
