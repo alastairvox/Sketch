@@ -17,6 +17,9 @@
 		},
 		{
 			"path": "../sketch-old"
+		},
+		{
+			"path": "../crowdsec"
 		}
 	],
 	"settings": {

@@ -989,7 +989,7 @@ async def on_guild_remove(guild: discord.Guild):
     # async for announcement in dbGuild.twitchAnnouncements:
     #     await announcement.delete()
     if dbGuild:
-        dbGuild.delete()
+        await dbGuild.delete()
 
 # on member join give stream role
 @bot.event

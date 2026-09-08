@@ -816,15 +816,15 @@ async def addDiscordYTAnnouncement(request: aiohttp.web.Request):
                 responseStatus = await sketchYoutube.gatherYoutubeVideos(ytChannel)
                 if responseStatus != 200:
                     session['messages'].append(f'<b class="error">Failed creating Youtube announcement. (Error {responseStatus} when attempting to get {data.get('ytChannelID')} from YouTube. Make sure you have provided a valid YouTube channel ID (like UC_0hyh6_G3Ct1k1EiqaorqQ).)</b><br>Please try again, or contact alastairvox on discord.')
-                    announcement.delete()
-                    ytChannel.delete()
+                    await announcement.delete()
+                    await ytChannel.delete()
                     return aiohttp.web.HTTPSeeOther('/discord')
                 else:
                     responseStatus = await sketchYoutube.subscribeToYoutubeUploads(ytChannel)
                     if responseStatus != 202:
                         session['messages'].append(f'<b class="error">Failed creating Youtube announcement. (Error {responseStatus} when attempting to get {data.get('ytChannelID')} from YouTube. Make sure you have provided a valid YouTube channel ID (like UC_0hyh6_G3Ct1k1EiqaorqQ).)</b><br>Please try again, or contact alastairvox on discord.')
-                        announcement.delete()
-                        ytChannel.delete()
+                        await announcement.delete()
+                        await ytChannel.delete()
                         return aiohttp.web.HTTPSeeOther('/discord')
             
             session['messages'].append(f'<b class="success">Youtube announcement created.</b><br>Channel: {data.get('ytChannelID')}')
@@ -916,7 +916,7 @@ async def updateDiscordYTAnnouncement(request: aiohttp.web.Request):
                         if oldChannel:
                             announcement.youtubeChannel = oldChannel
                             await announcement.save()
-                        ytChannel.delete()
+                        await ytChannel.delete()
                         return aiohttp.web.HTTPSeeOther('/discord')
                     else:
                         responseStatus = await sketchYoutube.subscribeToYoutubeUploads(ytChannel)
@@ -925,7 +925,7 @@ async def updateDiscordYTAnnouncement(request: aiohttp.web.Request):
                             if oldChannel:
                                 announcement.youtubeChannel = oldChannel
                                 await announcement.save()
-                            ytChannel.delete()
+                            await ytChannel.delete()
                             return aiohttp.web.HTTPSeeOther('/discord')
                 
                 if oldChannel:
@@ -1075,7 +1075,7 @@ async def youtubeCallback(request: aiohttp.web.Request):
 # called by the hub to establish a new lease when subscribing to youtube uploads
 @routes.get('/youtube/{ytChannelID}')
 async def youtube(request: aiohttp.web.Request):
-    debug(f'Responding to {request}')
+    debug(f'Responding to YouTube PubSubHubBub new lease endpoint {request}')
     if hasattr(request, 'query'):
         channel = request.query.get('hub.topic')
         if channel:
@@ -1116,7 +1116,7 @@ async def youtubeUploadedNotification(request: aiohttp.web.Request):
     ytChannelID = request.match_info['ytChannelID']
     # store a copy of the youtube video number so i dont re-announce youtube videos if they just get updated: have to parse the xml of the text out for relevant bits
     # pass the text (xml, xml.etree.ElementTree?) to a discord function that parses out the author name, video title, URL (<link rel="alternate" href="), and the time published and then announces the stream
-    debug(f'Responding to {request} for {ytChannelID}')
+    debug(f'Responding to YouTube PubSubHubBub notification {request} for {ytChannelID}')
     # we add this to the end of the event loop so that we can return a response to the request right away, allowing us to respond and then process the data later
     loop = asyncio.get_event_loop()
     loop.create_task(sketchDiscord.announceYoutubeUpload(await request.read()))
