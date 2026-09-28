@@ -235,7 +235,7 @@ async def makeAnnouncement(dbStream: TwitchAnnouncement, twitchioStream, game):
     else:
         embed.set_thumbnail(url='https://static-cdn.jtvnw.net/ttv-static/404_boxart.jpg')
     embed.add_field(name='Started',value=dateString, inline=True)
-    if game:
+    if game and getattr(game, "name", False):
         embed.add_field(name='Playing',value=game.name, inline=True)
     else:
         embed.add_field(name='Playing',value="Unknown Game", inline=True)
